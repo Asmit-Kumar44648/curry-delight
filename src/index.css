@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", serif;
+
+  --color-charcoal: #1A1613;
+  --color-saffron: #E8622C;
+  --color-cream: #FFF9F2;
+  --color-ink: #26201B;
+  --color-text-on-dark: #FFF9F2;
+  --color-star-gold: #D9A441;
+}
+
+/* Custom utility for tabular numbers in Inter */
+.font-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accessible focus styling */
+*:focus-visible {
+  outline: 2px solid #E8622C;
+  outline-offset: 2px;
+}
+

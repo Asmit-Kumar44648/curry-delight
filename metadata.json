@@ -1,0 +1,6 @@
+{
+  "name": "Curry Delight",
+  "description": "A single-page ordering and reservation website for Curry Delight, a family-run Indian curry restaurant in Kahalgaon, Bihar, India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

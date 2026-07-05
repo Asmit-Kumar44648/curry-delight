@@ -1,0 +1,133 @@
+{
+  "entities": {
+    "MenuItem": {
+      "title": "Menu Item",
+      "description": "A dish available in the restaurant menu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "isVeg": { "type": "boolean" },
+        "spiceLevel": { "type": "string", "enum": ["mild", "medium", "hot"] },
+        "image": { "type": "string" },
+        "imagePrompt": { "type": "string" },
+        "badge": { "type": "string" }
+      },
+      "required": ["name", "price", "category", "isVeg"]
+    },
+    "Order": {
+      "title": "Admin Order",
+      "description": "An order placed by a customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "customerAddress": { "type": "string" },
+        "deliveryType": { "type": "string", "enum": ["delivery", "pickup"] },
+        "paymentMethod": { "type": "string", "enum": ["cod", "upi"] },
+        "specialInstructions": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["placed", "preparing", "out_for_delivery", "delivered"] },
+        "assignedDeliveryBoyId": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["customerName", "customerPhone", "total", "status", "createdAt"]
+    },
+    "Reservation": {
+      "title": "Reservation",
+      "description": "A table reservation request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "partySize": { "type": "number" },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "specialRequests": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] }
+      },
+      "required": ["fullName", "phone", "partySize", "date", "timeSlot", "status", "createdAt"]
+    },
+    "CelebrationEnquiry": {
+      "title": "Celebration Enquiry",
+      "description": "An enquiry for hosting an event or celebration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "eventDate": { "type": "string" },
+        "headcount": { "type": "number" },
+        "budget": { "type": "string" },
+        "occasionType": { "type": "string" },
+        "requirements": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "contacted", "confirmed", "closed"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["fullName", "phone", "eventDate", "headcount", "status", "createdAt"]
+    },
+    "DeliveryBoy": {
+      "title": "Delivery Boy",
+      "description": "A staff member assigned for deliveries",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["name", "phone"]
+    },
+    "Settings": {
+      "title": "Admin Settings",
+      "description": "Global restaurant settings",
+      "type": "object",
+      "properties": {
+        "gstEnabled": { "type": "boolean" },
+        "gstin": { "type": "string" },
+        "cgstRate": { "type": "number" },
+        "sgstRate": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "upiVpa": { "type": "string" },
+        "kitchenBufferMinutes": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "menu_items/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Collection of all menu items"
+    },
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of customer orders"
+    },
+    "reservations/{resId}": {
+      "schema": "Reservation",
+      "description": "Collection of table reservations"
+    },
+    "celebrations/{enqId}": {
+      "schema": "CelebrationEnquiry",
+      "description": "Collection of celebration enquiries"
+    },
+    "delivery_boys/{boyId}": {
+      "schema": "DeliveryBoy",
+      "description": "Collection of delivery personnel"
+    },
+    "settings/global": {
+      "schema": "Settings",
+      "description": "Single document for global settings"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Menu items: Anyone can read, only authenticated staff can write
+    match /menu_items/{itemId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Orders: Anyone can create, only staff can read/update
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated();
+    }
+
+    // Reservations: Anyone can create, only staff can read/update
+    match /reservations/{resId} {
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated();
+    }
+
+    // Celebrations: Anyone can create, only staff can read/update
+    match /celebrations/{enqId} {
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated();
+    }
+
+    // Delivery Boys: Only staff can read/write
+    match /delivery_boys/{boyId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Settings: Anyone can read, only staff can write
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+  }
+}
