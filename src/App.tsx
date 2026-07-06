@@ -511,8 +511,8 @@ export default function App() {
             className="flex items-center space-x-3 text-left group cursor-pointer"
             id="brand-logo"
           >
-            <div className="bg-saffron p-2 rounded-full text-white flex items-center justify-center transition-transform group-hover:scale-105">
-              <Flame className="w-5 h-5 animate-pulse" />
+            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 bg-white border border-white/10 shadow-sm flex-shrink-0">
+              <img src="/src/assets/images/logo.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
             <div>
               <span className="font-display font-bold text-2xl text-[#FFF9F2] tracking-tight block">
@@ -1260,7 +1260,12 @@ export default function App() {
           
           {/* Col 1: About wordmark */}
           <div className="space-y-4 text-left">
-            <span className="font-display font-bold text-2xl text-white block">Curry Delight</span>
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-white flex items-center justify-center border border-white/10 shadow-sm flex-shrink-0">
+                <img src="/src/assets/images/logo.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
+              </div>
+              <span className="font-display font-bold text-2xl text-white block">Curry Delight</span>
+            </div>
             <p className="text-cream/70 text-xs leading-relaxed max-w-xs font-normal">
               Proudly family-owned and serving real, freshly roasted food recipes in Kahalgaon, Bihar. Experience the warm, true comfort of home-cooked Indian culinary excellence.
             </p>

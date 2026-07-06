@@ -448,8 +448,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       <div className="min-h-screen bg-charcoal flex items-center justify-center p-6 font-sans">
         <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
           <div className="flex justify-center mb-6">
-            <div className="bg-saffron p-3 rounded-full text-white">
-              <ShieldAlert className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-white border border-charcoal/10 flex items-center justify-center p-1 shadow-sm">
+              <img src="/src/assets/images/logo.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
           </div>
           <h2 className="text-2xl font-black text-center text-charcoal mb-2">Admin Portal</h2>
