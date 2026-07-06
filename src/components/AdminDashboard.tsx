@@ -11,6 +11,7 @@ import {
 import { 
   adminStore, AdminOrder, AdminReservation, 
   AdminCelebrationEnquiry, DeliveryBoy, AdminSettings,
+  SiteContent, GalleryImage,
   playNewOrderSound
 } from '../lib/adminStore';
 import { MenuItem } from '../types';
@@ -29,7 +30,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   // --- Active Tab ---
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings' | 'sitecontent'>('orders');
   
   // --- Auth State ---
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -58,6 +59,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     upiVpa: 'aaravworlld@oksbi',
     kitchenBufferMinutes: 0
   });
+  const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
 
   // For testing the sound alert
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -106,6 +108,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     setDeliveryBoys(adminStore.getDeliveryBoys());
     setSettings(adminStore.getSettings());
     setMenuItems(adminStore.getMenuItems());
+    setSiteContent(adminStore.getSiteContent());
   };
 
   useEffect(() => {
@@ -689,6 +692,18 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
             >
               <Settings className="w-4 h-4" />
               <span>GST & Tax Panel</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('sitecontent')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'sitecontent' 
+                  ? 'bg-saffron text-white shadow' 
+                  : 'text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal'
+              }`}
+            >
+              <MapPin className="w-4 h-4" />
+              <span>🖼️ Site Content & Offers</span>
             </button>
           </>
         )}
@@ -1825,6 +1840,204 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
             </div>
           </form>
+        )}
+
+        {/* --- SITE CONTENT & OFFERS TAB --- */}
+        {activeTab === 'sitecontent' && (
+          <div className="space-y-8" id="panel-sitecontent">
+            <div>
+              <h2 className="font-display font-black text-2xl text-charcoal">🖼️ Site Content &amp; Offers</h2>
+              <p className="text-xs text-charcoal/50 mt-1">Control the website's images, delivery fee, and promotional offers from here. Changes reflect live instantly.</p>
+            </div>
+
+            {/* Hero Image */}
+            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
+              <h3 className="font-display font-bold text-lg text-charcoal">🏠 Hero Section Image</h3>
+              <p className="text-xs text-charcoal/50">This is the large restaurant interior image shown in the top section of the homepage.</p>
+              <div className="flex gap-4 items-start">
+                {siteContent.heroImageUrl && (
+                  <img src={siteContent.heroImageUrl} alt="Hero Preview" className="w-32 h-24 object-cover rounded-2xl border border-charcoal/10 flex-shrink-0" />
+                )}
+                <div className="flex-1 space-y-2">
+                  <label className="block text-xs font-bold text-charcoal/70">Hero Image URL</label>
+                  <input
+                    type="url"
+                    value={siteContent.heroImageUrl}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, heroImageUrl: e.target.value }))}
+                    placeholder="https://your-image-url.jpg"
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-sans"
+                  />
+                  <p className="text-[10px] text-charcoal/40">Paste any image URL (from Google Photos, Imgur, Unsplash etc.)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Gallery Images */}
+            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display font-bold text-lg text-charcoal">📸 Gallery Images</h3>
+                  <p className="text-xs text-charcoal/50 mt-0.5">{siteContent.galleryImages.length} images in the gallery.</p>
+                </div>
+                <button
+                  onClick={() => setSiteContent(prev => ({
+                    ...prev,
+                    galleryImages: [...prev.galleryImages, { url: '', title: 'New Image', category: 'Food' }]
+                  }))}
+                  className="bg-saffron/10 hover:bg-saffron/20 text-saffron text-xs font-bold px-4 py-2 rounded-xl cursor-pointer flex items-center gap-1.5 transition-all border border-saffron/20"
+                >
+                  <Plus className="w-4 h-4" /> Add Image
+                </button>
+              </div>
+              <div className="space-y-4">
+                {siteContent.galleryImages.map((img, idx) => (
+                  <div key={idx} className="flex gap-3 items-start p-4 bg-cream/30 rounded-2xl border border-charcoal/5">
+                    {img.url && (
+                      <img src={img.url} alt={img.title} className="w-20 h-16 object-cover rounded-xl border border-charcoal/10 flex-shrink-0" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    )}
+                    <div className="flex-1 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-charcoal/60 uppercase">Title</label>
+                          <input
+                            type="text"
+                            value={img.title}
+                            onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, title: e.target.value } : g) }))}
+                            className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-charcoal/60 uppercase">Category</label>
+                          <input
+                            type="text"
+                            value={img.category}
+                            onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, category: e.target.value } : g) }))}
+                            className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-charcoal/60 uppercase">Image URL</label>
+                        <input
+                          type="url"
+                          value={img.url}
+                          onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, url: e.target.value } : g) }))}
+                          placeholder="https://your-image-url.jpg"
+                          className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.filter((_, i) => i !== idx) }))}
+                      className="text-red-400 hover:bg-red-50 p-2 rounded-xl cursor-pointer transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Delivery Fee Settings */}
+            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
+              <h3 className="font-display font-bold text-lg text-charcoal">🛵 Delivery Fee Rules</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-charcoal/70">Free Delivery Threshold (₹)</label>
+                  <input
+                    type="number"
+                    value={siteContent.deliveryFeeThreshold}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, deliveryFeeThreshold: Number(e.target.value) }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                  />
+                  <p className="text-[10px] text-charcoal/40">Orders above this amount get free delivery. Set to 0 to always charge.</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-charcoal/70">Delivery Fee Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={siteContent.deliveryFeeAmount}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, deliveryFeeAmount: Number(e.target.value) }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                  />
+                  <p className="text-[10px] text-charcoal/40">This fee is charged for orders below the threshold. Set to 0 for always free.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Promotional Offer */}
+            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-bold text-lg text-charcoal">🏷️ Promotional Offer</h3>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs font-bold text-charcoal/70">{siteContent.offer.enabled ? '✅ Active' : '⭕ Inactive'}</span>
+                  <input
+                    type="checkbox"
+                    checked={siteContent.offer.enabled}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, enabled: e.target.checked } }))}
+                    className="w-5 h-5 rounded accent-saffron cursor-pointer"
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-charcoal/70">Coupon Code</label>
+                  <input
+                    type="text"
+                    value={siteContent.offer.code}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, code: e.target.value.toUpperCase() } }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    placeholder="DELIGHT15"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-charcoal/70">Discount %</label>
+                  <input
+                    type="number"
+                    value={siteContent.offer.discountPercent}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, discountPercent: Number(e.target.value) } }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-charcoal/70">Minimum Order Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={siteContent.offer.minOrder}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, minOrder: Number(e.target.value) } }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-charcoal/70">Offer Label (shown to customer)</label>
+                  <input
+                    type="text"
+                    value={siteContent.offer.label}
+                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, label: e.target.value } }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    placeholder="Flat 15% off on orders above ₹600"
+                  />
+                </div>
+              </div>
+              {siteContent.offer.enabled && (
+                <div className="bg-saffron/10 border border-saffron/20 rounded-2xl p-4 text-sm font-bold text-saffron">
+                  Preview: Use code <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-saffron/30">{siteContent.offer.code}</span> to get {siteContent.offer.discountPercent}% off on orders above ₹{siteContent.offer.minOrder}
+                </div>
+              )}
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={async () => {
+                await adminStore.saveSiteContent(siteContent);
+                alert('Site content & offers saved successfully! Your website will update instantly.');
+              }}
+              className="w-full bg-saffron hover:bg-saffron/90 text-white font-black text-sm py-4 rounded-2xl cursor-pointer transition-all shadow-lg flex items-center justify-center gap-2"
+            >
+              <Save className="w-5 h-5" />
+              Save All Site Content &amp; Offers
+            </button>
+          </div>
         )}
 
       </main>

@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { MenuItem } from '../types';
-import { AdminSettings, AdminOrder, AdminReservation, AdminCelebrationEnquiry, DeliveryBoy } from './adminStore';
+import { AdminSettings, AdminOrder, AdminReservation, AdminCelebrationEnquiry, DeliveryBoy, SiteContent } from './adminStore';
 
 // Ensure database is initialized before making a call to prevent SDK-level crash
 const ensureDb = () => {
@@ -224,5 +224,27 @@ export const firebaseService = {
   async updateSettings(settings: AdminSettings): Promise<void> {
     ensureDb();
     await setDoc(doc(db, 'settings', 'global'), cleanData(settings));
+  },
+
+  // ─── Site Content ────────────────────────────────────────────────────────
+
+  async getSiteContent(): Promise<SiteContent | null> {
+    ensureDb();
+    const docSnap = await getDoc(doc(db, 'settings', 'site_content'));
+    return docSnap.exists() ? docSnap.data() as SiteContent : null;
+  },
+
+  subscribeToSiteContent(callback: (content: SiteContent | null) => void) {
+    if (!db) return () => {};
+    return onSnapshot(doc(db, 'settings', 'site_content'), (docSnap) => {
+      callback(docSnap.exists() ? docSnap.data() as SiteContent : null);
+    }, (error) => {
+      console.error('Site content subscription error:', error);
+    });
+  },
+
+  async updateSiteContent(content: SiteContent): Promise<void> {
+    ensureDb();
+    await setDoc(doc(db, 'settings', 'site_content'), cleanData(content));
   }
 };

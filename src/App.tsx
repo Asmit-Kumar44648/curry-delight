@@ -30,14 +30,14 @@ import {
   Menu
 } from 'lucide-react';
 
-import { SPECIAL_OFFER } from './data';
+
 import { MenuItem, CartItem, ReservationRequest, OrderDetails } from './types';
 import Gallery from './components/Gallery';
 import OnlineOrdering from './components/OnlineOrdering';
 import TableReservation from './components/TableReservation';
 import Celebrations from './components/Celebrations';
 import AdminDashboard from './components/AdminDashboard';
-import { adminStore, AdminSettings } from './lib/adminStore';
+import { adminStore, AdminSettings, SiteContent } from './lib/adminStore';
 
 export default function App() {
   // --- Routing State ---
@@ -80,22 +80,29 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-  // --- Dynamic Menu Items & Settings ---
+  // --- Dynamic Menu Items, Settings & Site Content ---
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
   const [isLoading, setIsLoading] = useState(!adminStore.isInitialized);
   
   useEffect(() => {
     setMenuItems(adminStore.getMenuItems());
     setSettings(adminStore.getSettings());
+    setSiteContent(adminStore.getSiteContent());
     setIsLoading(!adminStore.isInitialized);
     const handleStorageChange = () => {
       setMenuItems(adminStore.getMenuItems());
       setSettings(adminStore.getSettings());
+      setSiteContent(adminStore.getSiteContent());
       setIsLoading(!adminStore.isInitialized);
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('adminStoreUpdate', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('adminStoreUpdate', handleStorageChange);
+    };
   }, []);
 
   // --- Cart and Checkout State ---
@@ -183,18 +190,19 @@ export default function App() {
     return cart.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
   }, [cart]);
 
-  // Special offer discount calculation
+  // Special offer discount calculation (driven by CMS siteContent)
   const discountAmount = useMemo(() => {
-    if (cartSubtotal >= SPECIAL_OFFER.minOrder) {
-      return Math.round(cartSubtotal * 0.15); // 15% discount
+    if (!siteContent.offer.enabled) return 0;
+    if (cartSubtotal >= siteContent.offer.minOrder) {
+      return Math.round(cartSubtotal * (siteContent.offer.discountPercent / 100));
     }
     return 0;
-  }, [cartSubtotal]);
+  }, [cartSubtotal, siteContent.offer]);
 
   const deliveryFee = useMemo(() => {
     if (checkoutData.deliveryType === 'pickup' || cart.length === 0) return 0;
-    return cartSubtotal >= 500 ? 0 : 40; // Free delivery above Rs. 500
-  }, [cartSubtotal, checkoutData.deliveryType, cart]);
+    return cartSubtotal >= siteContent.deliveryFeeThreshold ? 0 : siteContent.deliveryFeeAmount;
+  }, [cartSubtotal, checkoutData.deliveryType, cart, siteContent]);
 
   const cartTotal = useMemo(() => {
     return Math.max(0, cartSubtotal - discountAmount + deliveryFee);
@@ -828,7 +836,7 @@ export default function App() {
               <div className="lg:col-span-7 mt-8 lg:mt-0">
                 <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/20">
                   <img 
-                    src="/src/assets/images/restaurant_interior_1783110086038.jpg" 
+                    src={siteContent.heroImageUrl || '/src/assets/images/restaurant_interior_1783110086038.jpg'} 
                     alt="Curry Delight Restaurant Interior" 
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
@@ -1194,7 +1202,7 @@ export default function App() {
       </section>
 
       {/* 7. GALLERY SECTION */}
-      <Gallery galleryRef={galleryRef} />
+      <Gallery galleryRef={galleryRef} images={siteContent.galleryImages} />
 
 
             </>
@@ -1288,8 +1296,23 @@ export default function App() {
               We deliver hot within Kahalgaon proper, including NTPC Township, Block Road, and surrounding neighborhoods.
             </p>
             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-saffron font-bold block">Free Home Delivery</span>
-              <span className="text-[11px] text-cream/80 block mt-1 leading-relaxed">On all orders exceeding ₹500. Under ₹500, a nominal ₹40 delivery fee applies.</span>
+              {siteContent.deliveryFeeThreshold > 0 ? (
+                <>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-saffron font-bold block">
+                    {siteContent.deliveryFeeAmount === 0 ? 'Always Free Delivery' : `Free Delivery Above ₹${siteContent.deliveryFeeThreshold}`}
+                  </span>
+                  <span className="text-[11px] text-cream/80 block mt-1 leading-relaxed">
+                    {siteContent.deliveryFeeAmount > 0
+                      ? `Orders below ₹${siteContent.deliveryFeeThreshold} incur a ₹${siteContent.deliveryFeeAmount} delivery fee.`
+                      : 'We offer free delivery on all orders!'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-saffron font-bold block">Home Delivery</span>
+                  <span className="text-[11px] text-cream/80 block mt-1 leading-relaxed">Flat ₹{siteContent.deliveryFeeAmount} delivery charge applies.</span>
+                </>
+              )}
             </div>
           </div>
 

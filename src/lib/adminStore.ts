@@ -65,6 +65,30 @@ export interface AdminSettings {
   kitchenBufferMinutes: number;
 }
 
+export interface GalleryImage {
+  url: string;
+  title: string;
+  category: string;
+}
+
+export interface SiteOffer {
+  enabled: boolean;
+  code: string;
+  discountPercent: number;
+  minOrder: number;
+  label: string;
+}
+
+export interface SiteContent {
+  heroImageUrl: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  galleryImages: GalleryImage[];
+  deliveryFeeThreshold: number; // free delivery above this amount
+  deliveryFeeAmount: number;    // fee when below threshold
+  offer: SiteOffer;
+}
+
 // ─── Default Settings (used when Firestore has no settings yet) ────────────
 
 const DEFAULT_SETTINGS: AdminSettings = {
@@ -75,6 +99,29 @@ const DEFAULT_SETTINGS: AdminSettings = {
   deliveryFee: 30,
   upiVpa: 'aaravworlld@oksbi',
   kitchenBufferMinutes: 0
+};
+
+const DEFAULT_SITE_CONTENT: SiteContent = {
+  heroImageUrl: '/src/assets/images/restaurant_interior_1783110086038.jpg',
+  heroTitle: 'Aromatic Heritage from Kahalgaon',
+  heroSubtitle: 'Home-style Indian curries, straight off the tandoor — with Chinese, pizza, and everyday favorites for the rest of the table.',
+  galleryImages: [
+    { url: '/src/assets/images/restaurant_interior_1783110086038.jpg', title: 'Our Warm Interior', category: 'Ambiance' },
+    { url: '/src/assets/images/royal_thali_1783109108597.jpg', title: 'Royal Heritage Thali', category: 'Signature' },
+    { url: '/src/assets/images/chicken_biryani_1783109065917.jpg', title: "Chef's Special Biryani", category: 'Entrée' },
+    { url: '/src/assets/images/garlic_naan_1783109096266.jpg', title: 'Freshly Baked Naan', category: 'Tandoor' },
+    { url: '/src/assets/images/lamb_rogan_josh_1783109053132.jpg', title: 'Succulent Lamb Rogan Josh', category: 'Curry' },
+    { url: '/src/assets/images/samosa_starter_1783108996100.jpg', title: 'Crispy Golden Samosas', category: 'Starter' }
+  ],
+  deliveryFeeThreshold: 500,
+  deliveryFeeAmount: 40,
+  offer: {
+    enabled: false,
+    code: 'DELIGHT15',
+    discountPercent: 15,
+    minOrder: 600,
+    label: 'Flat 15% off on orders above ₹600'
+  }
 };
 
 // ─── Sound Alert Engine ────────────────────────────────────────────────────
@@ -138,6 +185,7 @@ let _reservations: AdminReservation[] = [];
 let _celebrations: AdminCelebrationEnquiry[] = [];
 let _deliveryBoys: DeliveryBoy[] = [];
 let _settings: AdminSettings = { ...DEFAULT_SETTINGS };
+let _siteContent: SiteContent = { ...DEFAULT_SITE_CONTENT };
 let _isInitialized = false;
 let _isInitializing = false;
 
@@ -180,6 +228,10 @@ export const adminStore = {
 
   getSettings(): AdminSettings {
     return _settings;
+  },
+
+  getSiteContent(): SiteContent {
+    return _siteContent;
   },
 
   /** Get IDs of all sold-out items (derived from menu item soldOut field) */
@@ -362,6 +414,18 @@ export const adminStore = {
     }
   },
 
+  // ─── Site Content ─────────────────────────────────────────────────────────
+
+  async saveSiteContent(content: SiteContent) {
+    _siteContent = content; // Optimistic update
+    dispatchStoreUpdate();
+    try {
+      await firebaseService.updateSiteContent(content);
+    } catch (e) {
+      console.error("Firebase updateSiteContent failed:", e);
+    }
+  },
+
   // ─── Menu Item Management ────────────────────────────────────────────────
 
   async addMenuItem(itemData: Omit<MenuItem, 'id'>): Promise<MenuItem> {
@@ -482,7 +546,19 @@ export const adminStore = {
         dispatchStoreUpdate();
       });
 
-      _unsubscribers = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6];
+      // Seed site content if missing
+      const remoteSiteContent = await firebaseService.getSiteContent();
+      if (!remoteSiteContent) {
+        console.log("Seeding Firestore with default site content...");
+        await firebaseService.updateSiteContent(DEFAULT_SITE_CONTENT);
+      }
+
+      const unsub7 = firebaseService.subscribeToSiteContent((content) => {
+        _siteContent = content || { ...DEFAULT_SITE_CONTENT };
+        dispatchStoreUpdate();
+      });
+
+      _unsubscribers = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6, unsub7];
       _isInitialized = true;
 
     } catch (e) {
