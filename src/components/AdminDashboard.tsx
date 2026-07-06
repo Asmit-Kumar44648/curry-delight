@@ -22,7 +22,8 @@ import {
   signOut,
   User as FirebaseUser
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, storage } from '../lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 interface AdminDashboardProps {
   navigateTo: (path: string) => void;
@@ -60,6 +61,20 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     kitchenBufferMinutes: 0
   });
   const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null); // tracks which image slot is uploading
+
+  // Upload image to Firebase Storage and return download URL
+  const uploadImage = async (file: File, slot: string): Promise<string> => {
+    setUploadingImage(slot);
+    try {
+      const storageRef = ref(storage, `site-images/${slot}-${Date.now()}-${file.name}`);
+      const snapshot = await uploadBytesResumable(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      return url;
+    } finally {
+      setUploadingImage(null);
+    }
+  };
 
   // For testing the sound alert
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -449,7 +464,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 rounded-full overflow-hidden bg-white border border-charcoal/10 flex items-center justify-center p-1 shadow-sm">
-              <img src="/src/assets/images/logo.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
+              <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
           </div>
           <h2 className="text-2xl font-black text-center text-charcoal mb-2">Admin Portal</h2>
@@ -1856,7 +1871,12 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
               <p className="text-xs text-charcoal/50">This is the large restaurant interior image shown in the top section of the homepage.</p>
               <div className="flex gap-4 items-start">
                 {siteContent.heroImageUrl && (
-                  <img src={siteContent.heroImageUrl} alt="Hero Preview" className="w-32 h-24 object-cover rounded-2xl border border-charcoal/10 flex-shrink-0" />
+                  <img src={siteContent.heroImageUrl} alt="Hero Preview" className="w-32 h-24 object-cover rounded-2xl border border-charcoal/10 flex-shrink-0" onError={(e) => (e.currentTarget.style.display='none')} />
+                )}
+                {!siteContent.heroImageUrl && (
+                  <div className="w-32 h-24 rounded-2xl bg-charcoal/5 border-2 border-dashed border-charcoal/15 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[9px] text-charcoal/30 font-mono text-center uppercase">No Image</span>
+                  </div>
                 )}
                 <div className="flex-1 space-y-2">
                   <label className="block text-xs font-bold text-charcoal/70">Hero Image URL</label>
@@ -1867,7 +1887,22 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     placeholder="https://your-image-url.jpg"
                     className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-sans"
                   />
-                  <p className="text-[10px] text-charcoal/40">Paste any image URL (from Google Photos, Imgur, Unsplash etc.)</p>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 bg-saffron/10 hover:bg-saffron/20 text-saffron text-xs font-bold px-4 py-2 rounded-xl cursor-pointer transition-all border border-saffron/20">
+                      {uploadingImage === 'hero' ? '⏳ Uploading...' : '📁 Upload from Device'}
+                      <input type="file" accept="image/*" className="hidden" disabled={!!uploadingImage} onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const url = await uploadImage(file, 'hero');
+                          setSiteContent(prev => ({ ...prev, heroImageUrl: url }));
+                        } catch (err) {
+                          alert('Upload failed. Check Firebase Storage rules.');
+                        }
+                      }} />
+                    </label>
+                    <span className="text-[10px] text-charcoal/40">or paste any direct image URL above</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1892,8 +1927,12 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
               <div className="space-y-4">
                 {siteContent.galleryImages.map((img, idx) => (
                   <div key={idx} className="flex gap-3 items-start p-4 bg-cream/30 rounded-2xl border border-charcoal/5">
-                    {img.url && (
+                    {img.url ? (
                       <img src={img.url} alt={img.title} className="w-20 h-16 object-cover rounded-xl border border-charcoal/10 flex-shrink-0" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    ) : (
+                      <div className="w-20 h-16 rounded-xl bg-charcoal/5 border-2 border-dashed border-charcoal/15 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[8px] text-charcoal/30 font-mono uppercase">No img</span>
+                      </div>
                     )}
                     <div className="flex-1 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
@@ -1917,14 +1956,27 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-charcoal/60 uppercase">Image URL</label>
+                        <label className="text-[10px] font-bold text-charcoal/60 uppercase">Image</label>
                         <input
                           type="url"
                           value={img.url}
                           onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, url: e.target.value } : g) }))}
                           placeholder="https://your-image-url.jpg"
-                          className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white"
+                          className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white mb-1"
                         />
+                        <label className="flex items-center gap-1.5 bg-saffron/10 hover:bg-saffron/20 text-saffron text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition-all border border-saffron/20 w-fit">
+                          {uploadingImage === `gallery-${idx}` ? '⏳ Uploading...' : '📁 Upload from Device'}
+                          <input type="file" accept="image/*" className="hidden" disabled={!!uploadingImage} onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const url = await uploadImage(file, `gallery-${idx}`);
+                              setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, url } : g) }));
+                            } catch (err) {
+                              alert('Upload failed. Check Firebase Storage rules.');
+                            }
+                          }} />
+                        </label>
                       </div>
                     </div>
                     <button

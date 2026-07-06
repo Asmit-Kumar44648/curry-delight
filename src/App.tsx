@@ -512,7 +512,7 @@ export default function App() {
             id="brand-logo"
           >
             <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 bg-white border border-white/10 shadow-sm flex-shrink-0">
-              <img src="/src/assets/images/logo.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
+              <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
             <div>
               <span className="font-display font-bold text-2xl text-[#FFF9F2] tracking-tight block">
@@ -562,7 +562,7 @@ export default function App() {
                   scrollToRef(galleryRef);
                 }
               }} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' && !isFullMenuSubpageActive ? 'text-white' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-gallery"
             >
               Gallery
@@ -575,7 +575,7 @@ export default function App() {
                   scrollToRef(contactRef);
                 }
               }} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' && !isFullMenuSubpageActive ? 'text-white' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-contact"
             >
               Contact
@@ -804,7 +804,7 @@ export default function App() {
 
                   {/* SECONDARY white outline CTA - Book Table */}
                   <button 
-                    onClick={() => scrollToSection(reservationRef, 'reservation')}
+                    onClick={() => navigateTo('/reserve')}
                     className="border border-[#FFF9F2]/30 text-[#FFF9F2] hover:bg-[#FFF9F2]/10 text-center font-bold text-base px-8 py-4 rounded-full transition-colors flex items-center justify-center space-x-1 cursor-pointer focus:outline-none"
                     id="hero-secondary-reserve-cta"
                   >
@@ -834,21 +834,30 @@ export default function App() {
 
               {/* Hero Restaurant Interior Image */}
               <div className="lg:col-span-7 mt-8 lg:mt-0">
-                <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/20">
-                  <img 
-                    src={siteContent.heroImageUrl || '/src/assets/images/restaurant_interior_1783110086038.jpg'} 
-                    alt="Curry Delight Restaurant Interior" 
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
-                  />
-
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/80 via-charcoal/20 to-transparent p-6 pt-24">
-                    <div className="flex items-center space-x-1.5 text-saffron font-bold text-xs uppercase font-mono tracking-wider">
-                      <Award className="w-4 h-4" />
-                      <span>Kahalgaon's Finest Dining</span>
+                <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/30">
+                  {siteContent.heroImageUrl ? (
+                    <img 
+                      src={siteContent.heroImageUrl} 
+                      alt="Curry Delight Restaurant Interior" 
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white/30 gap-3">
+                      <img src="/favicon.png" className="w-20 h-20 opacity-20" alt="" />
+                      <span className="text-xs font-mono uppercase tracking-widest font-bold opacity-50">Add hero image from Admin Panel</span>
                     </div>
-                    <h3 className="text-white font-display font-bold text-xl md:text-2xl mt-1">Our Elegant Warm Dining Room</h3>
-                  </div>
+                  )}
+
+                  {siteContent.heroImageUrl && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/80 via-charcoal/20 to-transparent p-6 pt-24">
+                      <div className="flex items-center space-x-1.5 text-saffron font-bold text-xs uppercase font-mono tracking-wider">
+                        <Award className="w-4 h-4" />
+                        <span>Kahalgaon's Finest Dining</span>
+                      </div>
+                      <h3 className="text-white font-display font-bold text-xl md:text-2xl mt-1">Our Elegant Warm Dining Room</h3>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1262,7 +1271,7 @@ export default function App() {
           <div className="space-y-4 text-left">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-full overflow-hidden bg-white flex items-center justify-center border border-white/10 shadow-sm flex-shrink-0">
-                <img src="/src/assets/images/logo.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
+                <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
               </div>
               <span className="font-display font-bold text-2xl text-white block">Curry Delight</span>
             </div>
@@ -1300,25 +1309,6 @@ export default function App() {
             <p className="text-cream/70 text-xs leading-relaxed font-normal">
               We deliver hot within Kahalgaon proper, including NTPC Township, Block Road, and surrounding neighborhoods.
             </p>
-            <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-              {siteContent.deliveryFeeThreshold > 0 ? (
-                <>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-saffron font-bold block">
-                    {siteContent.deliveryFeeAmount === 0 ? 'Always Free Delivery' : `Free Delivery Above ₹${siteContent.deliveryFeeThreshold}`}
-                  </span>
-                  <span className="text-[11px] text-cream/80 block mt-1 leading-relaxed">
-                    {siteContent.deliveryFeeAmount > 0
-                      ? `Orders below ₹${siteContent.deliveryFeeThreshold} incur a ₹${siteContent.deliveryFeeAmount} delivery fee.`
-                      : 'We offer free delivery on all orders!'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-saffron font-bold block">Home Delivery</span>
-                  <span className="text-[11px] text-cream/80 block mt-1 leading-relaxed">Flat ₹{siteContent.deliveryFeeAmount} delivery charge applies.</span>
-                </>
-              )}
-            </div>
           </div>
 
           {/* Col 4: Action Buttons */}

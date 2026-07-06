@@ -3,6 +3,7 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAS09hIXWeMJz_A_AjLzEZGRSqYxlp7iYY",
@@ -16,14 +17,16 @@ const firebaseConfig = {
 let app: any = null;
 let db: any = null;
 let auth: any = null;
+let storage: any = null;
 
 try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
   // Using the default database for the new project
   db = getFirestore(app);
   auth = getAuth(app);
+  storage = getStorage(app);
 } catch (error) {
   console.error("Firebase initialization failed:", error);
 }
 
-export { db, auth };
+export { db, auth, storage };

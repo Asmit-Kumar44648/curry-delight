@@ -102,17 +102,10 @@ const DEFAULT_SETTINGS: AdminSettings = {
 };
 
 const DEFAULT_SITE_CONTENT: SiteContent = {
-  heroImageUrl: '/src/assets/images/restaurant_interior_1783110086038.jpg',
+  heroImageUrl: '',
   heroTitle: 'Aromatic Heritage from Kahalgaon',
   heroSubtitle: 'Home-style Indian curries, straight off the tandoor — with Chinese, pizza, and everyday favorites for the rest of the table.',
-  galleryImages: [
-    { url: '/src/assets/images/restaurant_interior_1783110086038.jpg', title: 'Our Warm Interior', category: 'Ambiance' },
-    { url: '/src/assets/images/royal_thali_1783109108597.jpg', title: 'Royal Heritage Thali', category: 'Signature' },
-    { url: '/src/assets/images/chicken_biryani_1783109065917.jpg', title: "Chef's Special Biryani", category: 'Entrée' },
-    { url: '/src/assets/images/garlic_naan_1783109096266.jpg', title: 'Freshly Baked Naan', category: 'Tandoor' },
-    { url: '/src/assets/images/lamb_rogan_josh_1783109053132.jpg', title: 'Succulent Lamb Rogan Josh', category: 'Curry' },
-    { url: '/src/assets/images/samosa_starter_1783108996100.jpg', title: 'Crispy Golden Samosas', category: 'Starter' }
-  ],
+  galleryImages: [],
   deliveryFeeThreshold: 500,
   deliveryFeeAmount: 40,
   offer: {

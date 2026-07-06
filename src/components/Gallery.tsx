@@ -82,12 +82,7 @@ const Gallery: React.FC<GalleryProps> = ({ galleryRef, images }) => {
           </div>
         )}
 
-        {/* Bottom CTA or Info */}
-        <div className="pt-8 text-center">
-          <p className="text-[11px] font-mono text-charcoal/40 uppercase tracking-widest font-bold">
-            All images are authentic representations of our culinary craft
-          </p>
-        </div>
+
       </div>
     </section>
   );
