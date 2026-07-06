@@ -1,12 +1,9 @@
 /// <reference types="vite/client" />
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-// Read configuration dynamically from environment variables.
-// In Vite, these are populated from the local `.env` file during local development
-// and from Vercel Environment Variables in production.
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -18,6 +15,23 @@ const firebaseConfig = {
 
 const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID;
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, databaseId);
-export const auth = getAuth(app);
+let app: any = null;
+let db: any = null;
+let auth: any = null;
+
+// Ensure minimum configuration parameters are provided before initializing to prevent app crash
+const isConfigValid = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
+
+if (isConfigValid) {
+  try {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    db = getFirestore(app, databaseId);
+    auth = getAuth(app);
+  } catch (error) {
+    console.error("Firebase initialization failed:", error);
+  }
+} else {
+  console.warn("Firebase environment variables are missing. Application will run in offline/fallback mode.");
+}
+
+export { db, auth };

@@ -14,6 +14,14 @@ import {
   playNewOrderSound
 } from '../lib/adminStore';
 import { MenuItem } from '../types';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut,
+  User as FirebaseUser
+} from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 interface AdminDashboardProps {
   navigateTo: (path: string) => void;
@@ -23,6 +31,14 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   // --- Active Tab ---
   const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings'>('orders');
   
+  // --- Auth State ---
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
   // --- Staff Role: owner vs counter ---
   const [staffRole, setStaffRole] = useState<'owner' | 'counter'>('owner');
 
@@ -104,6 +120,14 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   // Sync state if activeTab restrictions change
@@ -394,6 +418,96 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     };
   }, [orders]);
 
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      if (authMode === 'signin') {
+        await signInWithEmailAndPassword(auth, authEmail, authPassword);
+      } else {
+        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed');
+    }
+  };
+
+  const handleSignOut = () => {
+    signOut(auth);
+  };
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-cream flex items-center justify-center text-charcoal font-bold">Checking credentials...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-charcoal flex items-center justify-center p-6 font-sans">
+        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+          <div className="flex justify-center mb-6">
+            <div className="bg-saffron p-3 rounded-full text-white">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-black text-center text-charcoal mb-2">Admin Portal</h2>
+          <p className="text-center text-charcoal/60 mb-6 text-sm">Secure access required.</p>
+          
+          {authError && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold mb-4 text-center border border-red-200">
+              {authError}
+            </div>
+          )}
+
+          <form onSubmit={handleAuthSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-charcoal mb-1">Email</label>
+              <input 
+                type="email" 
+                value={authEmail}
+                onChange={e => setAuthEmail(e.target.value)}
+                className="w-full bg-cream/30 border border-charcoal/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-saffron"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-charcoal mb-1">Password</label>
+              <input 
+                type="password" 
+                value={authPassword}
+                onChange={e => setAuthPassword(e.target.value)}
+                className="w-full bg-cream/30 border border-charcoal/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-saffron"
+                required
+              />
+            </div>
+            <button 
+              type="submit"
+              className="w-full bg-saffron hover:bg-saffron/90 text-white font-bold py-3 rounded-xl transition-all shadow-md cursor-pointer"
+            >
+              {authMode === 'signin' ? 'Sign In to Dashboard' : 'Create Admin Account'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <button 
+              onClick={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
+              className="text-xs text-charcoal/50 hover:text-charcoal font-bold transition-colors cursor-pointer"
+            >
+              {authMode === 'signin' ? 'Need an account? Sign Up' : 'Already have an account? Sign In'}
+            </button>
+          </div>
+          <div className="mt-4 text-center">
+            <button 
+              onClick={() => navigateTo('/')}
+              className="text-xs text-charcoal/40 hover:text-charcoal transition-colors cursor-pointer"
+            >
+              &larr; Back to Website
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-cream/25 text-charcoal font-sans" id="admin-dashboard-container">
       
@@ -461,6 +575,14 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
             className="bg-white/10 hover:bg-white/15 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all border border-white/10 cursor-pointer"
           >
             Return to Site
+          </button>
+          
+          <button 
+            onClick={handleSignOut}
+            className="bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-red-500/30 cursor-pointer flex items-center space-x-1"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
           </button>
         </div>
       </header>
