@@ -59,24 +59,28 @@ export default function Celebrations({ navigateTo }: CelebrationsProps) {
     }
   ];
 
-  const handleEnquirySubmit = (e: React.FormEvent) => {
+  const handleEnquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.fullName || !formData.phone || !formData.eventDate || !formData.headcount) {
       alert("Please fill in all required fields to register your enquiry.");
       return;
     }
 
-    // Save to the adminStore
-    adminStore.addCelebration({
-      fullName: formData.fullName,
-      phone: formData.phone,
-      email: formData.email,
-      eventDate: formData.eventDate,
-      headcount: parseInt(formData.headcount) || 10,
-      occasionType: formData.occasionType,
-      budget: formData.budget || undefined,
-      requirements: formData.requirements
-    });
+    try {
+      // Save to the adminStore (Firestore)
+      await adminStore.addCelebration({
+        fullName: formData.fullName,
+        phone: formData.phone,
+        email: formData.email,
+        eventDate: formData.eventDate,
+        headcount: parseInt(formData.headcount) || 10,
+        occasionType: formData.occasionType,
+        budget: formData.budget || undefined,
+        requirements: formData.requirements
+      });
+    } catch (err) {
+      console.error("Failed to save celebration enquiry to Firebase:", err);
+    }
 
     setEnquirySubmitted(true);
   };
@@ -99,7 +103,8 @@ export default function Celebrations({ navigateTo }: CelebrationsProps) {
       `\n\nPlease let us know your availability and customized packages. Thank you!`;
 
     const encoded = encodeURIComponent(message);
-    return `https://wa.me/917061591831?text=${encoded}`;
+    const waNumber = adminStore.getSettings()?.whatsappNumber || '917061591831';
+    return `https://wa.me/${waNumber}?text=${encoded}`;
   };
 
   return (

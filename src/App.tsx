@@ -349,11 +349,25 @@ export default function App() {
   };
 
   // --- Reservation handlers ---
-  const handleReservationSubmit = (e: React.FormEvent) => {
+  const handleReservationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (reservationStep < 3) {
       setReservationStep(prev => prev + 1);
     } else {
+      // Save reservation to Firestore
+      try {
+        await adminStore.addReservation({
+          fullName: reservationData.fullName,
+          phone: reservationData.phone,
+          partySize: reservationData.partySize,
+          date: reservationData.date,
+          timeSlot: reservationData.timeSlot,
+          specialRequests: reservationData.specialRequests || undefined
+        });
+      } catch (err) {
+        console.error("Failed to save reservation to Firebase:", err);
+      }
+
       // Trigger WhatsApp API link for the reservation
       const message = `Namaste Curry Delight Kahalgaon! I would like to reserve a table:\n\n` +
         `• *Name:* ${reservationData.fullName}\n` +

@@ -53,22 +53,26 @@ export default function TableReservation({ navigateTo }: TableReservationProps) 
     setStep(prev => Math.max(1, prev - 1));
   };
 
-  const handleBookTable = (e: React.FormEvent) => {
+  const handleBookTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestDetails.fullName || !guestDetails.phone) {
       alert("Please enter your name and phone number to book.");
       return;
     }
     
-    // Save to the adminStore
-    adminStore.addReservation({
-      fullName: guestDetails.fullName,
-      phone: guestDetails.phone,
-      partySize,
-      date: bookingDate,
-      timeSlot,
-      specialRequests: guestDetails.specialRequests
-    });
+    try {
+      // Save to Firestore via adminStore
+      await adminStore.addReservation({
+        fullName: guestDetails.fullName,
+        phone: guestDetails.phone,
+        partySize,
+        date: bookingDate,
+        timeSlot,
+        specialRequests: guestDetails.specialRequests
+      });
+    } catch (err) {
+      console.error("Failed to save table reservation to Firebase:", err);
+    }
 
     setIsConfirmed(true);
   };
@@ -89,7 +93,8 @@ export default function TableReservation({ navigateTo }: TableReservationProps) 
       `\n\nPlease confirm availability for our table. Thank you!`;
 
     const encoded = encodeURIComponent(message);
-    return `https://wa.me/917061591831?text=${encoded}`;
+    const waNumber = adminStore.getSettings()?.whatsappNumber || '917061591831';
+    return `https://wa.me/${waNumber}?text=${encoded}`;
   };
 
   return (
