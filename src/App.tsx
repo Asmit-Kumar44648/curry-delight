@@ -211,8 +211,11 @@ export default function App() {
   }, [cartSubtotal, checkoutData.deliveryType, cart, siteContent]);
 
   const cartTotal = useMemo(() => {
-    return Math.max(0, cartSubtotal - discountAmount + deliveryFee);
-  }, [cartSubtotal, discountAmount, deliveryFee]);
+    const taxable = Math.max(0, cartSubtotal - discountAmount);
+    const cgst = settings.gstEnabled ? Math.round(taxable * (settings.cgstRate / 100)) : 0;
+    const sgst = settings.gstEnabled ? Math.round(taxable * (settings.sgstRate / 100)) : 0;
+    return Math.max(0, taxable + deliveryFee + cgst + sgst);
+  }, [cartSubtotal, discountAmount, deliveryFee, settings]);
 
   const cartItemsCount = useMemo(() => {
     return cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -1617,10 +1620,22 @@ export default function App() {
                           <span className="font-bold font-tabular-nums">-₹{discountAmount}</span>
                         </div>
                       )}
-                      <div className="flex justify-between items-center text-charcoal/75">
+                       <div className="flex justify-between items-center text-charcoal/75">
                         <span>Delivery Fee</span>
                         <span className="font-bold font-tabular-nums">{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span>
                       </div>
+                      {settings.gstEnabled && (
+                        <>
+                          <div className="flex justify-between items-center text-charcoal/75 font-mono text-[11px]">
+                            <span>CGST ({settings.cgstRate}%)</span>
+                            <span className="font-bold font-tabular-nums">₹{Math.round(Math.max(0, cartSubtotal - discountAmount) * (settings.cgstRate / 100))}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-charcoal/75 font-mono text-[11px]">
+                            <span>SGST ({settings.sgstRate}%)</span>
+                            <span className="font-bold font-tabular-nums">₹{Math.round(Math.max(0, cartSubtotal - discountAmount) * (settings.sgstRate / 100))}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex justify-between items-center text-base font-bold text-charcoal pt-4 border-t border-charcoal/10">
                         <span>Grand Total</span>
                         <span className="text-saffron font-tabular-nums text-xl">₹{cartTotal}</span>

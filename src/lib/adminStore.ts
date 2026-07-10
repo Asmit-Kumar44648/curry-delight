@@ -92,8 +92,8 @@ export interface SiteContent {
 // ─── Default Settings (used when Firestore has no settings yet) ────────────
 
 const DEFAULT_SETTINGS: AdminSettings = {
-  gstEnabled: false,
-  gstin: '',
+  gstEnabled: true,
+  gstin: '24AAAAC1234A1Z5', // default sample placeholder GSTIN
   cgstRate: 2.5,
   sgstRate: 2.5,
   deliveryFee: 30,
