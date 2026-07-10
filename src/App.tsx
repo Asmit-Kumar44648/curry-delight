@@ -1320,11 +1320,11 @@ export default function App() {
           {/* Col 3: Small Map Embed */}
           <div className="space-y-4 text-left">
             <span className="text-[11px] text-saffron font-bold uppercase tracking-widest font-mono block">Find Us On Map</span>
-            <div className="w-full h-28 rounded-2xl overflow-hidden border border-white/10 shadow-md relative group">
+            <div className="w-full h-32 rounded-2xl overflow-hidden border border-white/10 shadow-md relative group bg-white/5 flex items-center justify-center">
               <iframe 
                 title="Curry Delight Map"
-                src="https://maps.google.com/maps?q=Curry%20Delight,%20Kahalgaon,%20Bihar&t=&z=15&ie=UTF8&iwloc=&output=embed" 
-                className="w-full h-full border-0 grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
+                src="https://maps.google.com/maps?q=Shiv%20Parvati%20Nagar,%20Block%20Rd,%20Kahalgaon,%20Bihar&t=&z=15&ie=UTF8&iwloc=&output=embed" 
+                className="w-full h-full border-0"
                 allowFullScreen={false} 
                 loading="lazy"
               />
