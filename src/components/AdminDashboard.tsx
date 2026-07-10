@@ -31,7 +31,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   // --- Active Tab ---
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings' | 'sitecontent'>('orders');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings' | 'sitecontent'>('dashboard');
   
   // --- Auth State ---
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -65,12 +65,24 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
   // Upload image to Firebase Storage and return download URL
   const uploadImage = async (file: File, slot: string): Promise<string> => {
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('File is too large. Maximum size is 5MB.');
+    }
     setUploadingImage(slot);
     try {
-      const storageRef = ref(storage, `site-images/${slot}-${Date.now()}-${file.name}`);
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storageRef = ref(storage, `site-images/${slot}-${Date.now()}-${sanitizedName}`);
       const snapshot = await uploadBytesResumable(storageRef, file);
       const url = await getDownloadURL(snapshot.ref);
       return url;
+    } catch (err: any) {
+      if (err.code === 'storage/unauthorized') {
+        throw new Error('Permission denied. Please go to Firebase Console → Storage → Rules and set:\nallow read, write: if request.auth != null;');
+      } else if (err.code === 'storage/unknown') {
+        throw new Error('Storage error. Make sure Firebase Storage is enabled in your Firebase project.');
+      }
+      throw err;
     } finally {
       setUploadingImage(null);
     }
@@ -111,7 +123,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     price: 150,
     isVeg: true,
     spiceLevel: 'medium' as 'mild' | 'medium' | 'hot',
-    badge: ''
+    badge: '',
+    image: ''
   });
 
   // --- Load and Sync Data ---
@@ -247,8 +260,134 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   };
 
   // --- KOT and Bill Thermal Print triggers ---
-  const handleBrowserPrint = () => {
-    window.print();
+  const handleBrowserPrint = async () => {
+    if (!printingOrder) return;
+
+    // Try Web Bluetooth first
+    const bluetooth = (navigator as any).bluetooth;
+    if (bluetooth) {
+      try {
+        // Request a Bluetooth device with printer service UUID
+        const device = await bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb']
+        });
+
+        const server = await device.gatt!.connect();
+
+        // Try known serial port / printer service UUIDs
+        let characteristic: any = null;
+        const serviceUuids = ['000018f0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb'];
+        for (const uuid of serviceUuids) {
+          try {
+            const service = await server.getPrimaryService(uuid);
+            const chars = await service.getCharacteristics();
+            for (const c of chars) {
+              if (c.properties.write || c.properties.writeWithoutResponse) {
+                characteristic = c;
+                break;
+              }
+            }
+            if (characteristic) break;
+          } catch (_) {}
+        }
+
+        if (!characteristic) throw new Error('No writable characteristic found on printer');
+
+        // Build ESC/POS byte sequence
+        const lines: string[] = [];
+        lines.push('\x1B\x40'); // Initialize printer (ESC @)
+        lines.push('\x1B\x61\x01'); // Center align
+        lines.push('\x1B\x21\x30'); // Double height + width
+        lines.push('CURRY DELIGHT\n');
+        lines.push('\x1B\x21\x00'); // Normal size
+        lines.push('Station Road, Kahalgaon\n');
+        lines.push('Ph: +91 7061591831\n');
+        lines.push('--------------------------------\n');
+        lines.push('\x1B\x61\x00'); // Left align
+        lines.push(`Order: ${printingOrder.id}\n`);
+        lines.push(`Type : ${printingOrder.deliveryType.toUpperCase()}\n`);
+        lines.push(`Cust : ${printingOrder.customerName}\n`);
+        lines.push(`Ph   : ${printingOrder.customerPhone}\n`);
+        if (printingOrder.deliveryType === 'delivery') {
+          lines.push(`Addr : ${printingOrder.customerAddress.substring(0, 32)}\n`);
+        }
+        lines.push('--------------------------------\n');
+
+        printingOrder.items.forEach((it) => {
+          lines.push(`${it.menuItem.name.substring(0, 20).padEnd(20)} x${it.quantity}`);
+          if (printType === 'bill') {
+            lines.push(`  Rs.${(it.menuItem.price * it.quantity).toString().padStart(6)}\n`);
+          } else {
+            lines.push('\n');
+          }
+          if (it.selectedSpice) lines.push(`  Spice: ${it.selectedSpice}\n`);
+          if (it.specialInstructions) lines.push(`  Note: ${it.specialInstructions}\n`);
+        });
+
+        lines.push('--------------------------------\n');
+
+        if (printType === 'bill') {
+          lines.push(`Subtotal :  Rs.${printingOrder.subtotal}\n`);
+          if (printingOrder.discount > 0) lines.push(`Discount : -Rs.${printingOrder.discount}\n`);
+          if (printingOrder.deliveryFee > 0) lines.push(`Delivery : +Rs.${printingOrder.deliveryFee}\n`);
+          lines.push('================================\n');
+          lines.push('\x1B\x21\x10'); // Bold
+          lines.push(`TOTAL    :  Rs.${printingOrder.total}\n`);
+          lines.push('\x1B\x21\x00'); // Normal
+          lines.push(`Pay Via  : ${printingOrder.paymentMethod.toUpperCase()}\n`);
+        } else {
+          lines.push('   ** KITCHEN COPY (KOT) **\n');
+          lines.push('   No pricing on this slip\n');
+        }
+
+        lines.push('\x1B\x61\x01'); // Center
+        lines.push('\nThank you! Cook with love.\n');
+        lines.push('\x1B\x64\x05'); // Feed 5 lines
+        lines.push('\x1D\x56\x41'); // Full cut
+
+        const encoder = new TextEncoder();
+        const raw = lines.join('');
+        const bytes = encoder.encode(raw);
+
+        // Send in chunks of 20 bytes (BLE MTU limit)
+        const CHUNK = 20;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          await characteristic.writeValue(bytes.slice(i, i + CHUNK));
+        }
+
+        alert(`✅ Receipt sent successfully to "${device.name || 'Bluetooth Printer'}"!`);
+        setPrintingOrder(null);
+        setPrintType(null);
+        return;
+      } catch (err: any) {
+        if (err.name === 'NotFoundError' || err.message?.includes('cancelled')) {
+          // User cancelled device picker — fall through to browser print
+        } else {
+          console.error('Bluetooth print failed:', err);
+          alert(`Bluetooth print failed: ${err.message}\n\nFalling back to browser print.`);
+        }
+      }
+    }
+
+    // Fallback: open browser print dialog targeting only the receipt area
+    const receiptEl = document.getElementById('printable-thermal-receipt');
+    if (receiptEl) {
+      const printWindow = window.open('', '_blank', 'width=320,height=600');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html><head><title>Curry Delight - ${printType === 'kot' ? 'KOT' : 'Bill'}</title>
+          <style>
+            body { font-family: monospace; font-size: 11px; width: 220px; margin: 0; padding: 4px; }
+            @media print { @page { margin: 0; size: 58mm auto; } body { width: 58mm; } }
+          </style></head><body>
+          ${receiptEl.innerHTML}
+          <script>window.onload = () => { window.print(); window.close(); }<\/script>
+          </body></html>
+        `);
+        printWindow.document.close();
+      }
+    }
   };
 
   // --- Roster Managers ---
@@ -289,7 +428,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       price: 150,
       isVeg: true,
       spiceLevel: 'medium',
-      badge: ''
+      badge: '',
+      image: ''
     });
     setIsMenuModalOpen(true);
   };
@@ -304,7 +444,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       price: item.price,
       isVeg: item.isVeg,
       spiceLevel: item.spiceLevel || 'medium',
-      badge: item.badge || ''
+      badge: item.badge || '',
+      image: item.image || ''
     });
     setIsMenuModalOpen(true);
   };
@@ -325,7 +466,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         isVeg: menuForm.isVeg,
         spiceLevel: menuForm.spiceLevel,
         badge: menuForm.badge || undefined,
-        image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120', // standard placeholder
+        image: menuForm.image || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120',
         imagePrompt: 'Minimalist Indian dish'
       });
       alert('New dish added to the catalog!');
@@ -337,7 +478,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         price: menuForm.price,
         isVeg: menuForm.isVeg,
         spiceLevel: menuForm.spiceLevel,
-        badge: menuForm.badge || undefined
+        badge: menuForm.badge || undefined,
+        ...(menuForm.image ? { image: menuForm.image } : {})
       });
       alert('Menu item updated successfully!');
     }
@@ -414,6 +556,24 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     const codRevenue = todayDelivered.filter(o => o.paymentMethod === 'cod').reduce((sum, o) => sum + o.total, 0);
     const upiRevenue = todayDelivered.filter(o => o.paymentMethod === 'upi').reduce((sum, o) => sum + o.total, 0);
 
+    const allDeliveredOrders = orders.filter(o => o.status === 'delivered' || o.status === 'completed');
+    const aov = allDeliveredOrders.length > 0 
+      ? Math.round(allDeliveredOrders.reduce((sum, o) => sum + o.total, 0) / allDeliveredOrders.length) 
+      : 0;
+
+    // Peak hours analysis
+    const hourCounts: Record<number, number> = {};
+    orders.forEach(o => {
+      try {
+        const hour = new Date(o.createdAt).getHours();
+        hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+      } catch (err) {}
+    });
+    const peakHours = Object.entries(hourCounts)
+      .map(([hour, count]) => ({ hour: Number(hour), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
     // Top selling items count
     const itemCounts: Record<string, number> = {};
     orders.forEach(o => {
@@ -432,6 +592,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       todayRevenue: totalTodayRevenue,
       codRevenue,
       upiRevenue,
+      aov,
+      peakHours,
       topSelling
     };
   }, [orders]);
@@ -608,6 +770,18 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       {/* --- DASHBOARD SUB-NAVIGATION --- */}
       <nav className="bg-white border-b border-charcoal/5 px-6 md:px-12 py-3 overflow-x-auto flex items-center space-x-2 scrollbar-none">
         <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'dashboard' 
+              ? 'bg-charcoal text-white shadow' 
+              : 'text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          <span>Dashboard Overview</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('orders')}
           className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
             activeTab === 'orders' 
@@ -726,6 +900,142 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
       {/* --- DASHBOARD WRAPPER PANEL --- */}
       <main className="max-w-7xl mx-auto p-6 md:p-8 space-y-8 text-left">
+
+        {/* --- TAB 0: DASHBOARD OVERVIEW --- */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-8 animate-fade-in" id="panel-dashboard">
+            <div className="space-y-1">
+              <h2 className="font-display font-black text-2xl text-charcoal">
+                📈 Restaurant Performance Dashboard
+              </h2>
+              <p className="text-xs text-charcoal/50">Real-time metrics, order volumes, peak ordering hours, and menu performance metrics.</p>
+            </div>
+
+            {/* Performance Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Today's Revenue */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-6 shadow-xs hover:shadow-md transition-all space-y-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono block">Today's Revenue</span>
+                <p className="text-3xl font-display font-black text-saffron">₹{analytics.todayRevenue}</p>
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Real-time delivered total</span>
+                </div>
+              </div>
+
+              {/* AOV */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-6 shadow-xs hover:shadow-md transition-all space-y-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono block">Average Order Value</span>
+                <p className="text-3xl font-display font-black text-charcoal">₹{analytics.aov}</p>
+                <div className="text-[10px] text-charcoal/40 font-bold">Average ticket size (All-time)</div>
+              </div>
+
+              {/* Active Orders */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-6 shadow-xs hover:shadow-md transition-all space-y-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono block">Active Kitchen Queue</span>
+                <p className="text-3xl font-display font-black text-charcoal">
+                  {orders.filter(o => !['delivered', 'completed', 'cancelled'].includes(o.status)).length}
+                </p>
+                <div className="text-[10px] text-charcoal/40 font-bold">Orders being prepared or out</div>
+              </div>
+
+              {/* Pending Bookings */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-6 shadow-xs hover:shadow-md transition-all space-y-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono block">Pending Bookings</span>
+                <p className="text-3xl font-display font-black text-amber-600">
+                  {reservations.filter(r => r.status === 'pending').length}
+                </p>
+                <div className="text-[10px] text-charcoal/40 font-bold">Reservations awaiting response</div>
+              </div>
+            </div>
+
+            {/* Top Dishes & Peak Hours Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Top Selling Items */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-6 shadow-sm space-y-4">
+                <div className="border-b border-charcoal/5 pb-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-charcoal/70 font-mono">🔥 Busiest Items (All-Time)</h3>
+                  <p className="text-[10px] text-charcoal/40 mt-0.5">Top performing items by quantity sold</p>
+                </div>
+                <div className="space-y-4 pt-1">
+                  {analytics.topSelling.length === 0 ? (
+                    <div className="text-xs text-charcoal/40 text-center py-12">No orders recorded yet.</div>
+                  ) : (
+                    analytics.topSelling.map((it, idx) => {
+                      const maxQty = analytics.topSelling[0].count;
+                      const percentage = Math.round((it.count / maxQty) * 100);
+                      return (
+                        <div key={idx} className="space-y-1.5 text-xs text-charcoal">
+                          <div className="flex justify-between font-bold">
+                            <span>{idx + 1}. {it.name}</span>
+                            <span className="font-mono text-saffron">{it.count} sold</span>
+                          </div>
+                          <div className="h-2 bg-charcoal/5 rounded-full overflow-hidden">
+                            <div className="bg-saffron h-full rounded-full" style={{ width: `${percentage}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Peak Ordering Hours */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-6 shadow-sm space-y-4">
+                <div className="border-b border-charcoal/5 pb-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-charcoal/70 font-mono">🕒 Peak Ordering Hours</h3>
+                  <p className="text-[10px] text-charcoal/40 mt-0.5">Most common hours of the day when orders are placed</p>
+                </div>
+                <div className="space-y-3.5 pt-1">
+                  {analytics.peakHours.length === 0 ? (
+                    <div className="text-xs text-charcoal/40 text-center py-12">No order time stamps recorded.</div>
+                  ) : (
+                    analytics.peakHours.map((ph, idx) => {
+                      const formatHour = (h: number) => {
+                        const ampm = h >= 12 ? 'PM' : 'AM';
+                        const displayHour = h % 12 || 12;
+                        return `${displayHour}:00 ${ampm}`;
+                      };
+                      return (
+                        <div key={idx} className="flex justify-between items-center bg-cream/35 border border-charcoal/5 p-3 rounded-2xl">
+                          <div className="flex items-center space-x-3">
+                            <span className="w-6 h-6 rounded-full bg-saffron/10 text-saffron font-bold text-xs flex items-center justify-center font-mono">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-bold text-charcoal">{formatHour(ph.hour)}</span>
+                          </div>
+                          <span className="text-xs font-mono font-bold bg-charcoal/5 px-3 py-1 rounded-xl text-charcoal/70">
+                            {ph.count} orders
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* CMS Shortcut Actions Panel */}
+            <div className="bg-charcoal text-white rounded-3xl p-6 md:p-8 space-y-4 border border-white/5 shadow-xl">
+              <h3 className="font-display font-bold text-lg">⚡ CMS Quick Shortcuts</h3>
+              <p className="text-xs text-white/50">Instantly switch to operational panels to manage your restaurant queue or update configuration.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                <button onClick={() => setActiveTab('orders')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
+                  📋 Live Orders
+                </button>
+                <button onClick={() => setActiveTab('reservations')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
+                  📅 Reservations
+                </button>
+                <button onClick={() => setActiveTab('menu')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
+                  🍔 Edit Menu
+                </button>
+                <button onClick={() => setActiveTab('sitecontent')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
+                  🖼️ Site Content
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* --- TAB 1: LIVE ORDER QUEUE --- */}
         {activeTab === 'orders' && (
@@ -1896,8 +2206,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                         try {
                           const url = await uploadImage(file, 'hero');
                           setSiteContent(prev => ({ ...prev, heroImageUrl: url }));
-                        } catch (err) {
-                          alert('Upload failed. Check Firebase Storage rules.');
+                        } catch (err: any) {
+                          alert(`Upload failed: ${err.message}`);
                         }
                       }} />
                     </label>
@@ -1973,7 +2283,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                               const url = await uploadImage(file, `gallery-${idx}`);
                               setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, url } : g) }));
                             } catch (err) {
-                              alert('Upload failed. Check Firebase Storage rules.');
+                              alert(`Upload failed: ${err.message}`);
                             }
                           }} />
                         </label>
@@ -2214,7 +2524,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                 className="w-full bg-charcoal hover:bg-charcoal/90 text-white font-bold py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 text-xs"
               >
                 <Printer className="w-4 h-4" />
-                <span>Send to Connected 58mm Printer</span>
+                <span>🖨️ Print via Bluetooth / Browser</span>
               </button>
 
               <button
@@ -2346,6 +2656,40 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     <option value="medium">🌶️🌶️ Medium</option>
                     <option value="hot">🌶️🌶️🌶️ Bihari Spicy</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Dish Image Upload */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">Dish Image</label>
+                {menuForm.image && (
+                  <div className="w-20 h-20 rounded-xl overflow-hidden border border-charcoal/10 shadow-inner">
+                    <img src={menuForm.image} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <input
+                  type="text"
+                  placeholder="https://your-image-url.jpg"
+                  value={menuForm.image}
+                  onChange={(e) => setMenuForm(prev => ({ ...prev, image: e.target.value }))}
+                  className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-sans"
+                  id="menu-form-image-url"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 bg-saffron/10 hover:bg-saffron/20 text-saffron text-xs font-bold px-4 py-2 rounded-xl cursor-pointer transition-all border border-saffron/20">
+                    {uploadingImage === 'menu-item' ? '⏳ Uploading...' : '📁 Upload Image'}
+                    <input type="file" accept="image/*" className="hidden" disabled={!!uploadingImage} onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const url = await uploadImage(file, 'menu-item');
+                        setMenuForm(prev => ({ ...prev, image: url }));
+                      } catch (err: any) {
+                        alert(`Upload failed: ${err.message}`);
+                      }
+                    }} />
+                  </label>
+                  <span className="text-[10px] text-charcoal/40">or paste URL above</span>
                 </div>
               </div>
 

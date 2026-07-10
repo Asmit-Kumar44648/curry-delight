@@ -37,7 +37,7 @@ import OnlineOrdering from './components/OnlineOrdering';
 import TableReservation from './components/TableReservation';
 import Celebrations from './components/Celebrations';
 import AdminDashboard from './components/AdminDashboard';
-import { adminStore, AdminSettings, SiteContent } from './lib/adminStore';
+import { adminStore, AdminSettings, SiteContent, AdminOrder, DeliveryBoy } from './lib/adminStore';
 
 export default function App() {
   // --- Routing State ---
@@ -84,17 +84,23 @@ export default function App() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
   const [isLoading, setIsLoading] = useState(!adminStore.isInitialized);
   
   useEffect(() => {
     setMenuItems(adminStore.getMenuItems());
     setSettings(adminStore.getSettings());
     setSiteContent(adminStore.getSiteContent());
+    setOrders(adminStore.getOrders());
+    setDeliveryBoys(adminStore.getDeliveryBoys());
     setIsLoading(!adminStore.isInitialized);
     const handleStorageChange = () => {
       setMenuItems(adminStore.getMenuItems());
       setSettings(adminStore.getSettings());
       setSiteContent(adminStore.getSiteContent());
+      setOrders(adminStore.getOrders());
+      setDeliveryBoys(adminStore.getDeliveryBoys());
       setIsLoading(!adminStore.isInitialized);
     };
     window.addEventListener('storage', handleStorageChange);
@@ -414,7 +420,7 @@ export default function App() {
       total: cartTotal,
       items: [...cart],
       specialInstructions: checkoutData.specialInstructions
-    });
+    }, mockOrderId);
 
     setOrderConfirmation(confirmation);
     setCart([]); // Clear cart
@@ -497,6 +503,11 @@ export default function App() {
       </div>
     );
   }
+
+  // Find order in synced orders
+  const currentLiveOrder = orderConfirmation ? orders.find(o => o.id === orderConfirmation.orderId) : null;
+  const currentStatus = currentLiveOrder ? currentLiveOrder.status : 'placed';
+  const assignedBoy = currentLiveOrder?.assignedDeliveryBoyId ? deliveryBoys.find(b => b.id === currentLiveOrder.assignedDeliveryBoyId) : null;
 
   return (
     <div className="min-h-screen bg-cream font-sans text-ink selection:bg-saffron selection:text-white">
@@ -1426,6 +1437,15 @@ export default function App() {
         </button>
       )}
 
+      {/* FLOATING CALL TO ORDER BUTTON FOR MOBILE */}
+      <a 
+        href="tel:+917061591831"
+        className="fixed bottom-20 left-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full p-4 shadow-xl z-35 flex items-center justify-center cursor-pointer focus:outline-none border border-white/10 hover:scale-105 transition-transform lg:hidden animate-pulse"
+        id="mobile-floating-call-btn"
+        title="Call to Order"
+      >
+        <Phone className="w-6 h-6" />
+      </a>
 
       {/* --- CART SLIDE-IN PANEL --- */}
       <AnimatePresence>
@@ -1474,7 +1494,7 @@ export default function App() {
                 <div className="p-5 space-y-6">
                   {/* Status/Discount Banner */}
                   {cart.length > 0 && (
-                    cartSubtotal >= SPECIAL_OFFER.minOrder ? (
+                    cartSubtotal >= siteContent.offer.minOrder ? (
                       <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 p-4 rounded-2xl flex items-start space-x-3">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                         <div>
@@ -1487,7 +1507,7 @@ export default function App() {
                         <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                         <div>
                           <span className="text-xs font-bold uppercase tracking-wider block font-mono">Unlock 15% Savings</span>
-                          <span className="text-xs font-normal text-amber-800/95 mt-0.5 block">Add ₹{SPECIAL_OFFER.minOrder - cartSubtotal} more to receive 15% off with code DELIGHT15.</span>
+                          <span className="text-xs font-normal text-amber-800/95 mt-0.5 block">Add ₹{siteContent.offer.minOrder - cartSubtotal} more to receive {siteContent.offer.discountPercent}% off with code {siteContent.offer.code}.</span>
                         </div>
                       </div>
                     )
@@ -2105,19 +2125,119 @@ export default function App() {
               id="confirmation-modal"
             >
               
-              <div className="text-center space-y-2">
+              <div className="text-center space-y-3">
                 <div className="bg-emerald-100 p-3.5 rounded-full text-emerald-600 inline-flex items-center justify-center mb-1">
                   <CheckCircle2 className="w-10 h-10 animate-bounce" />
                 </div>
                 <h3 className="font-display font-bold text-2xl text-charcoal">
-                  Your Order is Cooking!
+                  {currentStatus === 'cancelled' ? 'Order Cancelled' : currentStatus === 'delivered' || currentStatus === 'completed' ? 'Delivered & Enjoy!' : 'Your Order is Cooking!'}
                 </h3>
                 <p className="text-xs text-emerald-800 font-bold bg-emerald-50 px-3.5 py-1.5 rounded-full inline-block font-mono">
                   Order Code: {orderConfirmation.orderId}
                 </p>
-                <p className="text-xs text-charcoal/50 font-normal">
+                <p className="text-xs text-charcoal/50 font-normal block">
                   Estimated Ready Time: <strong className="text-charcoal font-bold">{orderConfirmation.estimatedTime}</strong>
                 </p>
+
+                {/* --- LIVE PIZZA TRACKER TRACKING BAR --- */}
+                <div className="pt-4 pb-2 px-1">
+                  <div className="relative flex items-center justify-between w-full">
+                    {/* Background Progress Bar Line */}
+                    <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-charcoal/10 rounded-full -z-1" />
+                    
+                    {/* Fill Progress Bar Line */}
+                    <div 
+                      className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-saffron rounded-full -z-1 transition-all duration-500" 
+                      style={{ 
+                        width: currentStatus === 'placed' ? '0%' : 
+                               currentStatus === 'preparing' ? '33.33%' : 
+                               currentStatus === 'out_for_delivery' ? '66.66%' : 
+                               ['delivered', 'completed'].includes(currentStatus) ? '100%' : '0%'
+                      }}
+                    />
+
+                    {/* Step 1: Placed */}
+                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        ['placed', 'preparing', 'out_for_delivery', 'delivered', 'completed'].includes(currentStatus) 
+                          ? 'bg-saffron border-saffron text-white' 
+                          : 'bg-white border-charcoal/20 text-charcoal/30'
+                      }`}>
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <span className="text-[9px] font-bold text-charcoal/60">Received</span>
+                    </div>
+
+                    {/* Step 2: Preparing */}
+                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        ['preparing', 'out_for_delivery', 'delivered', 'completed'].includes(currentStatus) 
+                          ? 'bg-saffron border-saffron text-white' 
+                          : 'bg-white border-charcoal/20 text-charcoal/30'
+                      }`}>
+                        <Flame className={`w-4 h-4 ${currentStatus === 'preparing' ? 'animate-pulse' : ''}`} />
+                      </div>
+                      <span className="text-[9px] font-bold text-charcoal/60">Cooking</span>
+                    </div>
+
+                    {/* Step 3: Out/Ready */}
+                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        ['out_for_delivery', 'delivered', 'completed'].includes(currentStatus) 
+                          ? 'bg-saffron border-saffron text-white' 
+                          : 'bg-white border-charcoal/20 text-charcoal/30'
+                      }`}>
+                        <ShoppingBag className="w-4 h-4" />
+                      </div>
+                      <span className="text-[9px] font-bold text-charcoal/60">
+                        {orderConfirmation.summary.deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready'}
+                      </span>
+                    </div>
+
+                    {/* Step 4: Completed */}
+                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        ['delivered', 'completed'].includes(currentStatus) 
+                          ? 'bg-emerald-500 border-emerald-500 text-white' 
+                          : 'bg-white border-charcoal/20 text-charcoal/30'
+                      }`}>
+                        <Award className="w-4 h-4" />
+                      </div>
+                      <span className="text-[9px] font-bold text-charcoal/60">Enjoy!</span>
+                    </div>
+                  </div>
+
+                  {/* Status update description */}
+                  <p className="text-[11px] text-center text-charcoal/60 mt-4 bg-cream/30 p-2.5 rounded-xl border border-charcoal/5">
+                    <strong>Status: </strong>
+                    {currentStatus === 'placed' && "We've received your order. The kitchen is confirming the items."}
+                    {currentStatus === 'preparing' && "Chef is in the kitchen preparing your fresh meal now."}
+                    {currentStatus === 'out_for_delivery' && (orderConfirmation.summary.deliveryType === 'delivery' ? "Freshly cooked and dispatched! Our delivery rider is on the way." : "Cooking completed! Your package is hot and ready for pickup.")}
+                    {(currentStatus === 'delivered' || currentStatus === 'completed') && "Order delivered/picked up successfully! Enjoy your Curry Delight meal!"}
+                    {currentStatus === 'cancelled' && "This order has been cancelled by the admin."}
+                  </p>
+
+                  {/* Delivery Boy Card */}
+                  {currentStatus === 'out_for_delivery' && assignedBoy && (
+                    <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-2xl p-3 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                          {assignedBoy.name[0]}
+                        </div>
+                        <div className="text-left">
+                          <div className="text-xs font-bold text-emerald-950">Rider: {assignedBoy.name}</div>
+                          <div className="text-[10px] text-emerald-800">Delivering your hot order now</div>
+                        </div>
+                      </div>
+                      <a 
+                        href={`tel:${assignedBoy.phone}`} 
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5"
+                      >
+                        <Phone className="w-3.5 h-3.5" /> Call Rider
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Order breakdown summary */}

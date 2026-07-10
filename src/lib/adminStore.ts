@@ -234,8 +234,8 @@ export const adminStore = {
 
   // ─── Write Methods (write to Firestore, cache updates via subscription) ──
 
-  async addOrder(orderData: Omit<AdminOrder, 'id' | 'createdAt' | 'status'>): Promise<AdminOrder> {
-    const id = `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  async addOrder(orderData: Omit<AdminOrder, 'id' | 'createdAt' | 'status'>, customId?: string): Promise<AdminOrder> {
+    const id = customId || `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrder: AdminOrder = {
       ...orderData,
       id,
