@@ -625,7 +625,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       <div className="min-h-screen bg-charcoal flex items-center justify-center p-6 font-sans">
         <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 rounded-full overflow-hidden bg-white border border-charcoal/10 flex items-center justify-center p-1 shadow-sm">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-black border border-charcoal/10 flex items-center justify-center p-1 shadow-sm">
               <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
           </div>

@@ -522,7 +522,7 @@ export default function App() {
             className="flex items-center space-x-3 text-left group cursor-pointer"
             id="brand-logo"
           >
-            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 bg-white border border-white/10 shadow-sm flex-shrink-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 bg-black border border-white/10 shadow-sm flex-shrink-0">
               <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
             <div>
@@ -539,28 +539,28 @@ export default function App() {
           <div className="hidden lg:flex items-center space-x-10 text-sm font-semibold tracking-wide text-[#FFF9F2]/75">
             <button 
               onClick={() => navigateTo('/')} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-home"
             >
               Home
             </button>
             <button 
               onClick={() => navigateTo('/order')} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/order' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/order' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-order"
             >
               Our Menu
             </button>
             <button 
               onClick={() => navigateTo('/reserve')} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/reserve' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/reserve' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-reserve"
             >
               Reserve a Table
             </button>
             <button 
               onClick={() => navigateTo('/celebrations')} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/celebrations' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/celebrations' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-celebrations"
             >
               Celebrations
@@ -573,7 +573,7 @@ export default function App() {
                   scrollToRef(galleryRef);
                 }
               }} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-gallery"
             >
               Gallery
@@ -586,7 +586,7 @@ export default function App() {
                   scrollToRef(contactRef);
                 }
               }} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron border-b-2 border-saffron pb-1' : 'text-[#FFF9F2]/80'}`}
+              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
               id="nav-link-contact"
             >
               Contact
@@ -1281,7 +1281,7 @@ export default function App() {
           {/* Col 1: About wordmark */}
           <div className="space-y-4 text-left">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-white flex items-center justify-center border border-white/10 shadow-sm flex-shrink-0">
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-black flex items-center justify-center border border-white/10 shadow-sm flex-shrink-0">
                 <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
               </div>
               <span className="font-display font-bold text-2xl text-white block">Curry Delight</span>
