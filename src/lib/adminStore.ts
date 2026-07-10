@@ -11,7 +11,8 @@ export interface AdminOrder {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
-  deliveryType: 'delivery' | 'pickup';
+  deliveryType: 'delivery' | 'pickup' | 'dine-in';
+  tableNumber?: string;
   paymentMethod: 'cod' | 'upi';
   specialInstructions?: string;
   subtotal: number;
@@ -55,22 +56,6 @@ export interface DeliveryBoy {
   phone: string;
 }
 
-export interface AdminSettings {
-  gstEnabled: boolean;
-  gstin: string;
-  cgstRate: number;
-  sgstRate: number;
-  deliveryFee: number;
-  upiVpa: string;
-  kitchenBufferMinutes: number;
-}
-
-export interface GalleryImage {
-  url: string;
-  title: string;
-  category: string;
-}
-
 export interface SiteOffer {
   enabled: boolean;
   code: string;
@@ -79,14 +64,17 @@ export interface SiteOffer {
   label: string;
 }
 
-export interface SiteContent {
-  heroImageUrl: string;
-  heroTitle: string;
-  heroSubtitle: string;
-  galleryImages: GalleryImage[];
-  deliveryFeeThreshold: number; // free delivery above this amount
-  deliveryFeeAmount: number;    // fee when below threshold
+export interface AdminSettings {
+  gstEnabled: boolean;
+  gstin: string;
+  cgstRate: number;
+  sgstRate: number;
+  deliveryFee: number;
+  upiVpa: string;
+  kitchenBufferMinutes: number;
   offer: SiteOffer;
+  deliveryFeeThreshold: number;
+  deliveryFeeAmount: number;
 }
 
 // ─── Default Settings (used when Firestore has no settings yet) ────────────
@@ -98,23 +86,16 @@ const DEFAULT_SETTINGS: AdminSettings = {
   sgstRate: 2.5,
   deliveryFee: 30,
   upiVpa: 'aaravworlld@oksbi',
-  kitchenBufferMinutes: 0
-};
-
-const DEFAULT_SITE_CONTENT: SiteContent = {
-  heroImageUrl: '',
-  heroTitle: 'Aromatic Heritage from Kahalgaon',
-  heroSubtitle: 'Home-style Indian curries, straight off the tandoor — with Chinese, pizza, and everyday favorites for the rest of the table.',
-  galleryImages: [],
-  deliveryFeeThreshold: 500,
-  deliveryFeeAmount: 40,
+  kitchenBufferMinutes: 0,
   offer: {
     enabled: false,
     code: 'DELIGHT15',
     discountPercent: 15,
     minOrder: 600,
     label: 'Flat 15% off on orders above ₹600'
-  }
+  },
+  deliveryFeeThreshold: 500,
+  deliveryFeeAmount: 40
 };
 
 // ─── Sound Alert Engine ────────────────────────────────────────────────────
@@ -178,7 +159,6 @@ let _reservations: AdminReservation[] = [];
 let _celebrations: AdminCelebrationEnquiry[] = [];
 let _deliveryBoys: DeliveryBoy[] = [];
 let _settings: AdminSettings = { ...DEFAULT_SETTINGS };
-let _siteContent: SiteContent = { ...DEFAULT_SITE_CONTENT };
 let _isInitialized = false;
 let _isInitializing = false;
 
@@ -221,10 +201,6 @@ export const adminStore = {
 
   getSettings(): AdminSettings {
     return _settings;
-  },
-
-  getSiteContent(): SiteContent {
-    return _siteContent;
   },
 
   /** Get IDs of all sold-out items (derived from menu item soldOut field) */
@@ -407,17 +383,7 @@ export const adminStore = {
     }
   },
 
-  // ─── Site Content ─────────────────────────────────────────────────────────
 
-  async saveSiteContent(content: SiteContent) {
-    _siteContent = content; // Optimistic update
-    dispatchStoreUpdate();
-    try {
-      await firebaseService.updateSiteContent(content);
-    } catch (e) {
-      console.error("Firebase updateSiteContent failed:", e);
-    }
-  },
 
   // ─── Menu Item Management ────────────────────────────────────────────────
 
@@ -539,19 +505,7 @@ export const adminStore = {
         dispatchStoreUpdate();
       });
 
-      // Seed site content if missing
-      const remoteSiteContent = await firebaseService.getSiteContent();
-      if (!remoteSiteContent) {
-        console.log("Seeding Firestore with default site content...");
-        await firebaseService.updateSiteContent(DEFAULT_SITE_CONTENT);
-      }
-
-      const unsub7 = firebaseService.subscribeToSiteContent((content) => {
-        _siteContent = content || { ...DEFAULT_SITE_CONTENT };
-        dispatchStoreUpdate();
-      });
-
-      _unsubscribers = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6, unsub7];
+      _unsubscribers = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6];
       _isInitialized = true;
 
     } catch (e) {

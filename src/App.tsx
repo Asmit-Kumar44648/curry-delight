@@ -37,7 +37,7 @@ import OnlineOrdering from './components/OnlineOrdering';
 import TableReservation from './components/TableReservation';
 import Celebrations from './components/Celebrations';
 import AdminDashboard from './components/AdminDashboard';
-import { adminStore, AdminSettings, SiteContent, AdminOrder, DeliveryBoy } from './lib/adminStore';
+import { adminStore, AdminSettings, AdminOrder, DeliveryBoy } from './lib/adminStore';
 
 export default function App() {
   // --- Routing State ---
@@ -83,7 +83,6 @@ export default function App() {
   // --- Dynamic Menu Items, Settings & Site Content ---
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [settings, setSettings] = useState<AdminSettings>(() => adminStore.getSettings());
-  const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
   const [isLoading, setIsLoading] = useState(!adminStore.isInitialized);
@@ -91,14 +90,12 @@ export default function App() {
   useEffect(() => {
     setMenuItems(adminStore.getMenuItems());
     setSettings(adminStore.getSettings());
-    setSiteContent(adminStore.getSiteContent());
     setOrders(adminStore.getOrders());
     setDeliveryBoys(adminStore.getDeliveryBoys());
     setIsLoading(!adminStore.isInitialized);
     const handleStorageChange = () => {
       setMenuItems(adminStore.getMenuItems());
       setSettings(adminStore.getSettings());
-      setSiteContent(adminStore.getSiteContent());
       setOrders(adminStore.getOrders());
       setDeliveryBoys(adminStore.getDeliveryBoys());
       setIsLoading(!adminStore.isInitialized);
@@ -196,19 +193,19 @@ export default function App() {
     return cart.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
   }, [cart]);
 
-  // Special offer discount calculation (driven by CMS siteContent)
+  // Special offer discount calculation (driven by CMS settings)
   const discountAmount = useMemo(() => {
-    if (!siteContent.offer.enabled) return 0;
-    if (cartSubtotal >= siteContent.offer.minOrder) {
-      return Math.round(cartSubtotal * (siteContent.offer.discountPercent / 100));
+    if (!settings.offer?.enabled) return 0;
+    if (cartSubtotal >= settings.offer.minOrder) {
+      return Math.round(cartSubtotal * (settings.offer.discountPercent / 100));
     }
     return 0;
-  }, [cartSubtotal, siteContent.offer]);
+  }, [cartSubtotal, settings.offer]);
 
   const deliveryFee = useMemo(() => {
     if (checkoutData.deliveryType === 'pickup' || cart.length === 0) return 0;
-    return cartSubtotal >= siteContent.deliveryFeeThreshold ? 0 : siteContent.deliveryFeeAmount;
-  }, [cartSubtotal, checkoutData.deliveryType, cart, siteContent]);
+    return cartSubtotal >= (settings.deliveryFeeThreshold || 500) ? 0 : (settings.deliveryFeeAmount || 40);
+  }, [cartSubtotal, checkoutData.deliveryType, cart, settings]);
 
   const cartTotal = useMemo(() => {
     const taxable = Math.max(0, cartSubtotal - discountAmount);
@@ -849,29 +846,19 @@ export default function App() {
               {/* Hero Restaurant Interior Image */}
               <div className="lg:col-span-7 mt-8 lg:mt-0">
                 <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/30">
-                  {siteContent.heroImageUrl ? (
-                    <img 
-                      src={siteContent.heroImageUrl} 
-                      alt="Curry Delight Restaurant Interior" 
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-white/30 gap-3">
-                      <img src="/favicon.png" className="w-20 h-20 opacity-20" alt="" />
-                      <span className="text-xs font-mono uppercase tracking-widest font-bold opacity-50">Add hero image from Admin Panel</span>
+                  <img 
+                    src="https://images.unsplash.com/photo-1517244683960-9bc8265c15af?q=80&w=2000&auto=format&fit=crop" 
+                    alt="Curry Delight Restaurant Interior" 
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/80 via-charcoal/20 to-transparent p-6 pt-24">
+                    <div className="flex items-center space-x-1.5 text-saffron font-bold text-xs uppercase font-mono tracking-wider">
+                      <Award className="w-4 h-4" />
+                      <span>Kahalgaon's Finest Dining</span>
                     </div>
-                  )}
-
-                  {siteContent.heroImageUrl && (
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/80 via-charcoal/20 to-transparent p-6 pt-24">
-                      <div className="flex items-center space-x-1.5 text-saffron font-bold text-xs uppercase font-mono tracking-wider">
-                        <Award className="w-4 h-4" />
-                        <span>Kahalgaon's Finest Dining</span>
-                      </div>
-                      <h3 className="text-white font-display font-bold text-xl md:text-2xl mt-1">Our Elegant Warm Dining Room</h3>
-                    </div>
-                  )}
+                    <h3 className="text-white font-display font-bold text-xl md:text-2xl mt-1">Our Elegant Warm Dining Room</h3>
+                  </div>
                 </div>
               </div>
 
@@ -1225,7 +1212,13 @@ export default function App() {
       </section>
 
       {/* 7. GALLERY SECTION */}
-      <Gallery galleryRef={galleryRef} images={siteContent.galleryImages} />
+      <Gallery galleryRef={galleryRef} images={[
+        { url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?q=80&w=2000&auto=format&fit=crop', title: 'Samosa Chaat', category: 'Starters' },
+        { url: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?q=80&w=2000&auto=format&fit=crop', title: 'Chicken Biryani', category: 'Main Course' },
+        { url: 'https://images.unsplash.com/photo-1512485800893-b08ec1ea59b1?q=80&w=2000&auto=format&fit=crop', title: 'Paneer Butter Masala', category: 'Main Course' },
+        { url: 'https://images.unsplash.com/photo-1626074353765-517a681e40be?q=80&w=2000&auto=format&fit=crop', title: 'Tandoori Chicken', category: 'Tandoor' },
+        { url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?q=80&w=2000&auto=format&fit=crop', title: 'Gulab Jamun', category: 'Desserts' }
+      ]} />
 
 
             </>
@@ -1517,21 +1510,21 @@ export default function App() {
                 
                 <div className="p-5 space-y-6">
                   {/* Status/Discount Banner */}
-                  {cart.length > 0 && (
-                    cartSubtotal >= siteContent.offer.minOrder ? (
+                  {cart.length > 0 && settings.offer?.enabled && (
+                    cartSubtotal >= settings.offer.minOrder ? (
                       <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 p-4 rounded-2xl flex items-start space-x-3">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-xs font-bold uppercase tracking-wider block font-mono">DELIGHT15 Applied!</span>
-                          <span className="text-xs font-normal text-emerald-800/95 mt-0.5 block">Congrats! You've unlocked 15% OFF on your Kahalgaon order.</span>
+                          <span className="text-xs font-bold uppercase tracking-wider block font-mono">{settings.offer.code} Applied!</span>
+                          <span className="text-xs font-normal text-emerald-800/95 mt-0.5 block">Congrats! You've unlocked {settings.offer.discountPercent}% OFF on your Kahalgaon order.</span>
                         </div>
                       </div>
                     ) : (
                       <div className="bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-2xl flex items-start space-x-3">
                         <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-xs font-bold uppercase tracking-wider block font-mono">Unlock 15% Savings</span>
-                          <span className="text-xs font-normal text-amber-800/95 mt-0.5 block">Add ₹{siteContent.offer.minOrder - cartSubtotal} more to receive {siteContent.offer.discountPercent}% off with code {siteContent.offer.code}.</span>
+                          <span className="text-xs font-bold uppercase tracking-wider block font-mono">Unlock Savings</span>
+                          <span className="text-xs font-normal text-amber-800/95 mt-0.5 block">Add ₹{settings.offer.minOrder - cartSubtotal} more to receive {settings.offer.discountPercent}% off with code {settings.offer.code}.</span>
                         </div>
                       </div>
                     )

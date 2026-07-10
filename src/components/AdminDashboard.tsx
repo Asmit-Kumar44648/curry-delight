@@ -11,7 +11,6 @@ import {
 import { 
   adminStore, AdminOrder, AdminReservation, 
   AdminCelebrationEnquiry, DeliveryBoy, AdminSettings,
-  SiteContent, GalleryImage,
   playNewOrderSound
 } from '../lib/adminStore';
 import { MenuItem } from '../types';
@@ -22,8 +21,7 @@ import {
   signOut,
   User as FirebaseUser
 } from 'firebase/auth';
-import { auth, storage } from '../lib/firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { auth } from '../lib/firebase';
 
 interface AdminDashboardProps {
   navigateTo: (path: string) => void;
@@ -31,7 +29,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   // --- Active Tab ---
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings' | 'sitecontent'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'orders' | 'menu' | 'reservations' | 'celebrations' | 'roster' | 'reports' | 'settings'>('dashboard');
   
   // --- Auth State ---
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -60,33 +58,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     upiVpa: 'aaravworlld@oksbi',
     kitchenBufferMinutes: 0
   });
-  const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
-  const [uploadingImage, setUploadingImage] = useState<string | null>(null); // tracks which image slot is uploading
-
-  // Upload image to Firebase Storage and return download URL
-  const uploadImage = async (file: File, slot: string): Promise<string> => {
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error('File is too large. Maximum size is 5MB.');
-    }
-    setUploadingImage(slot);
-    try {
-      const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storageRef = ref(storage, `site-images/${slot}-${Date.now()}-${sanitizedName}`);
-      const snapshot = await uploadBytesResumable(storageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
-      return url;
-    } catch (err: any) {
-      if (err.code === 'storage/unauthorized') {
-        throw new Error('Permission denied. Please go to Firebase Console → Storage → Rules and set:\nallow read, write: if request.auth != null;');
-      } else if (err.code === 'storage/unknown') {
-        throw new Error('Storage error. Make sure Firebase Storage is enabled in your Firebase project.');
-      }
-      throw err;
-    } finally {
-      setUploadingImage(null);
-    }
-  };
+  // Image upload removed per requirements
 
   // For testing the sound alert
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -136,7 +108,6 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     setDeliveryBoys(adminStore.getDeliveryBoys());
     setSettings(adminStore.getSettings());
     setMenuItems(adminStore.getMenuItems());
-    setSiteContent(adminStore.getSiteContent());
   };
 
   useEffect(() => {
@@ -896,18 +867,6 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
               <Settings className="w-4 h-4" />
               <span>GST & Tax Panel</span>
             </button>
-
-            <button
-              onClick={() => setActiveTab('sitecontent')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'sitecontent' 
-                  ? 'bg-saffron text-white shadow' 
-                  : 'text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal'
-              }`}
-            >
-              <MapPin className="w-4 h-4" />
-              <span>🖼️ Site Content & Offers</span>
-            </button>
           </>
         )}
       </nav>
@@ -1043,9 +1002,11 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                 <button onClick={() => setActiveTab('menu')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
                   🍔 Edit Menu
                 </button>
-                <button onClick={() => setActiveTab('sitecontent')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
-                  🖼️ Site Content
-                </button>
+                {staffRole === 'owner' && (
+                  <button onClick={() => setActiveTab('settings')} className="bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-center cursor-pointer transition-all">
+                    Settings
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2039,9 +2000,9 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
           <form onSubmit={handleSaveSettings} className="space-y-6" id="panel-settings">
             <div className="space-y-1">
               <h2 className="font-display font-black text-2xl text-charcoal flex items-center gap-2">
-                ⚙️ GST & Pricing Control panel
+                ⚙️ Global Settings Control Panel
               </h2>
-              <p className="text-xs text-charcoal/50">Manage local taxes, delivery rates, and billing options.</p>
+              <p className="text-xs text-charcoal/50">Manage local taxes, delivery rates, billing options, and promotional offers.</p>
             </div>
 
             <div className="bg-white rounded-3xl border border-charcoal/10 p-6 md:p-8 shadow-sm space-y-6">
@@ -2074,7 +2035,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     <input
                       type="text"
                       disabled={!settings.gstEnabled}
-                      placeholder="e.g. 10AAAAA0000A1Z1 (Blank until CA confirms)"
+                      placeholder="e.g. 10AAAAA0000A1Z1"
                       value={settings.gstin}
                       onChange={(e) => setSettings(prev => ({ ...prev, gstin: e.target.value }))}
                       className={`w-full bg-cream/15 border border-charcoal/10 rounded-xl p-3 focus:outline-none text-xs font-semibold ${
@@ -2114,29 +2075,89 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                 </div>
               </div>
 
-              {/* Delivery Fee Input */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
-                <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-bold uppercase tracking-wider text-charcoal block">Standard Flat Delivery Fee</label>
-                  <p className="text-[11px] text-charcoal/50 leading-relaxed font-normal">
-                    This flat rate is added as a dedicated delivery surcharge line to all "Home Delivery" type orders under ₹500. Orders above ₹500 continue to get free shipping.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-bold text-charcoal text-lg font-mono">₹</span>
-                  <input
-                    type="number"
-                    required
-                    value={settings.deliveryFee}
-                    onChange={(e) => setSettings(prev => ({ ...prev, deliveryFee: parseInt(e.target.value) || 0 }))}
-                    className="w-32 bg-cream/15 border border-charcoal/10 rounded-xl p-3 focus:outline-none font-mono font-bold text-sm"
-                  />
-                  <span className="text-xs text-charcoal/40 font-bold">Flat Rate</span>
+              {/* Delivery Fee Settings */}
+              <div className="pb-6 border-b border-charcoal/5 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal block">🛵 Delivery Fee Rules</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Free Delivery Threshold (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.deliveryFeeThreshold}
+                      onChange={(e) => setSettings(prev => ({ ...prev, deliveryFeeThreshold: Number(e.target.value) }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                    <p className="text-[10px] text-charcoal/40">Orders above this get free delivery.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Delivery Fee Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.deliveryFeeAmount}
+                      onChange={(e) => setSettings(prev => ({ ...prev, deliveryFeeAmount: Number(e.target.value) }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                    <p className="text-[10px] text-charcoal/40">Fee applied below the threshold.</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Kitchen Buffer Time Input (Automated Delivery ETA Calculation) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-t border-charcoal/5 pt-6">
+              {/* Promotional Offer */}
+              <div className="pb-6 border-b border-charcoal/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal block">🏷️ Promotional Offer</h3>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-xs font-bold text-charcoal/70">{settings.offer?.enabled ? '✅ Active' : '⭕ Inactive'}</span>
+                    <input
+                      type="checkbox"
+                      checked={settings.offer?.enabled}
+                      onChange={(e) => setSettings(prev => ({ ...prev, offer: { ...prev.offer, enabled: e.target.checked } }))}
+                      className="w-5 h-5 rounded accent-saffron cursor-pointer"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Coupon Code</label>
+                    <input
+                      type="text"
+                      value={settings.offer?.code}
+                      onChange={(e) => setSettings(prev => ({ ...prev, offer: { ...prev.offer, code: e.target.value.toUpperCase() } }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Discount %</label>
+                    <input
+                      type="number"
+                      value={settings.offer?.discountPercent}
+                      onChange={(e) => setSettings(prev => ({ ...prev, offer: { ...prev.offer, discountPercent: Number(e.target.value) } }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Minimum Order Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={settings.offer?.minOrder}
+                      onChange={(e) => setSettings(prev => ({ ...prev, offer: { ...prev.offer, minOrder: Number(e.target.value) } }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Offer Label (shown to customer)</label>
+                    <input
+                      type="text"
+                      value={settings.offer?.label}
+                      onChange={(e) => setSettings(prev => ({ ...prev, offer: { ...prev.offer, label: e.target.value } }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Kitchen Buffer Time Input */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-bold uppercase tracking-wider text-charcoal block">🚀 Kitchen Buffer Delay (ETA Surcharge)</label>
                   <p className="text-[11px] text-charcoal/50 leading-relaxed font-normal">
@@ -2154,16 +2175,41 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     className="w-32 bg-cream/15 border border-charcoal/10 rounded-xl p-3 focus:outline-none font-mono font-bold text-sm"
                   />
                   <span className="text-xs text-charcoal/70 font-bold">Minutes Delay</span>
-                  {settings.kitchenBufferMinutes > 0 ? (
-                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-mono font-semibold">
-                      ⚠️ busy +{settings.kitchenBufferMinutes}m
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-emerald-100 text-emerald-600 px-2 py-1 rounded font-mono font-semibold">
-                      ⚡ normal
-                    </span>
-                  )}
                 </div>
+              </div>
+
+              {/* Database Wipe Action */}
+              <div className="pb-6 border-b border-charcoal/5 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-red-600 block flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Danger Zone
+                </h3>
+                <p className="text-[11px] text-charcoal/50 leading-relaxed font-normal">
+                  Completely wipe all order records from the database. This action is irreversible.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm("ARE YOU SURE? This will delete ALL orders from Firebase!")) {
+                      try {
+                        const { getFirestore, collection, getDocs, deleteDoc, doc } = await import('firebase/firestore');
+                        const { app } = await import('../lib/firebase');
+                        const db = getFirestore(app);
+                        const snapshot = await getDocs(collection(db, 'orders'));
+                        let count = 0;
+                        for (const document of snapshot.docs) {
+                          await deleteDoc(doc(db, 'orders', document.id));
+                          count++;
+                        }
+                        alert(`Successfully deleted ${count} orders.`);
+                      } catch (e: any) {
+                        alert("Error wiping orders: " + e.message);
+                      }
+                    }
+                  }}
+                  className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:border-red-300 font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-xl cursor-pointer flex items-center gap-1.5 transition-all"
+                >
+                  <Trash2 className="w-4 h-4" /> Wipe All Orders
+                </button>
               </div>
 
               {/* Save Settings Action Button */}
@@ -2179,241 +2225,6 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
             </div>
           </form>
-        )}
-
-        {/* --- SITE CONTENT & OFFERS TAB --- */}
-        {activeTab === 'sitecontent' && (
-          <div className="space-y-8" id="panel-sitecontent">
-            <div>
-              <h2 className="font-display font-black text-2xl text-charcoal">🖼️ Site Content &amp; Offers</h2>
-              <p className="text-xs text-charcoal/50 mt-1">Control the website's images, delivery fee, and promotional offers from here. Changes reflect live instantly.</p>
-            </div>
-
-            {/* Hero Image */}
-            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
-              <h3 className="font-display font-bold text-lg text-charcoal">🏠 Hero Section Image</h3>
-              <p className="text-xs text-charcoal/50">This is the large restaurant interior image shown in the top section of the homepage.</p>
-              <div className="flex gap-4 items-start">
-                {siteContent.heroImageUrl && (
-                  <img src={siteContent.heroImageUrl} alt="Hero Preview" className="w-32 h-24 object-cover rounded-2xl border border-charcoal/10 flex-shrink-0" onError={(e) => (e.currentTarget.style.display='none')} />
-                )}
-                {!siteContent.heroImageUrl && (
-                  <div className="w-32 h-24 rounded-2xl bg-charcoal/5 border-2 border-dashed border-charcoal/15 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[9px] text-charcoal/30 font-mono text-center uppercase">No Image</span>
-                  </div>
-                )}
-                <div className="flex-1 space-y-2">
-                  <label className="block text-xs font-bold text-charcoal/70">Hero Image URL</label>
-                  <input
-                    type="url"
-                    value={siteContent.heroImageUrl}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, heroImageUrl: e.target.value }))}
-                    placeholder="https://your-image-url.jpg"
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-sans"
-                  />
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 bg-saffron/10 hover:bg-saffron/20 text-saffron text-xs font-bold px-4 py-2 rounded-xl cursor-pointer transition-all border border-saffron/20">
-                      {uploadingImage === 'hero' ? '⏳ Uploading...' : '📁 Upload from Device'}
-                      <input type="file" accept="image/*" className="hidden" disabled={!!uploadingImage} onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        try {
-                          const url = await uploadImage(file, 'hero');
-                          setSiteContent(prev => ({ ...prev, heroImageUrl: url }));
-                        } catch (err: any) {
-                          alert(`Upload failed: ${err.message}`);
-                        }
-                      }} />
-                    </label>
-                    <span className="text-[10px] text-charcoal/40">or paste any direct image URL above</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Gallery Images */}
-            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-display font-bold text-lg text-charcoal">📸 Gallery Images</h3>
-                  <p className="text-xs text-charcoal/50 mt-0.5">{siteContent.galleryImages.length} images in the gallery.</p>
-                </div>
-                <button
-                  onClick={() => setSiteContent(prev => ({
-                    ...prev,
-                    galleryImages: [...prev.galleryImages, { url: '', title: 'New Image', category: 'Food' }]
-                  }))}
-                  className="bg-saffron/10 hover:bg-saffron/20 text-saffron text-xs font-bold px-4 py-2 rounded-xl cursor-pointer flex items-center gap-1.5 transition-all border border-saffron/20"
-                >
-                  <Plus className="w-4 h-4" /> Add Image
-                </button>
-              </div>
-              <div className="space-y-4">
-                {siteContent.galleryImages.map((img, idx) => (
-                  <div key={idx} className="flex gap-3 items-start p-4 bg-cream/30 rounded-2xl border border-charcoal/5">
-                    {img.url ? (
-                      <img src={img.url} alt={img.title} className="w-20 h-16 object-cover rounded-xl border border-charcoal/10 flex-shrink-0" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                    ) : (
-                      <div className="w-20 h-16 rounded-xl bg-charcoal/5 border-2 border-dashed border-charcoal/15 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[8px] text-charcoal/30 font-mono uppercase">No img</span>
-                      </div>
-                    )}
-                    <div className="flex-1 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-bold text-charcoal/60 uppercase">Title</label>
-                          <input
-                            type="text"
-                            value={img.title}
-                            onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, title: e.target.value } : g) }))}
-                            className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-charcoal/60 uppercase">Category</label>
-                          <input
-                            type="text"
-                            value={img.category}
-                            onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, category: e.target.value } : g) }))}
-                            className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-charcoal/60 uppercase">Image</label>
-                        <input
-                          type="url"
-                          value={img.url}
-                          onChange={(e) => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, url: e.target.value } : g) }))}
-                          placeholder="https://your-image-url.jpg"
-                          className="w-full border border-charcoal/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white mb-1"
-                        />
-                        <label className="flex items-center gap-1.5 bg-saffron/10 hover:bg-saffron/20 text-saffron text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition-all border border-saffron/20 w-fit">
-                          {uploadingImage === `gallery-${idx}` ? '⏳ Uploading...' : '📁 Upload from Device'}
-                          <input type="file" accept="image/*" className="hidden" disabled={!!uploadingImage} onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              const url = await uploadImage(file, `gallery-${idx}`);
-                              setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.map((g, i) => i === idx ? { ...g, url } : g) }));
-                            } catch (err) {
-                              alert(`Upload failed: ${err.message}`);
-                            }
-                          }} />
-                        </label>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setSiteContent(prev => ({ ...prev, galleryImages: prev.galleryImages.filter((_, i) => i !== idx) }))}
-                      className="text-red-400 hover:bg-red-50 p-2 rounded-xl cursor-pointer transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Delivery Fee Settings */}
-            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
-              <h3 className="font-display font-bold text-lg text-charcoal">🛵 Delivery Fee Rules</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-charcoal/70">Free Delivery Threshold (₹)</label>
-                  <input
-                    type="number"
-                    value={siteContent.deliveryFeeThreshold}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, deliveryFeeThreshold: Number(e.target.value) }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
-                  />
-                  <p className="text-[10px] text-charcoal/40">Orders above this amount get free delivery. Set to 0 to always charge.</p>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-charcoal/70">Delivery Fee Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={siteContent.deliveryFeeAmount}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, deliveryFeeAmount: Number(e.target.value) }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
-                  />
-                  <p className="text-[10px] text-charcoal/40">This fee is charged for orders below the threshold. Set to 0 for always free.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Promotional Offer */}
-            <div className="bg-white border border-charcoal/10 rounded-3xl p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-display font-bold text-lg text-charcoal">🏷️ Promotional Offer</h3>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-xs font-bold text-charcoal/70">{siteContent.offer.enabled ? '✅ Active' : '⭕ Inactive'}</span>
-                  <input
-                    type="checkbox"
-                    checked={siteContent.offer.enabled}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, enabled: e.target.checked } }))}
-                    className="w-5 h-5 rounded accent-saffron cursor-pointer"
-                  />
-                </label>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-charcoal/70">Coupon Code</label>
-                  <input
-                    type="text"
-                    value={siteContent.offer.code}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, code: e.target.value.toUpperCase() } }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
-                    placeholder="DELIGHT15"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-charcoal/70">Discount %</label>
-                  <input
-                    type="number"
-                    value={siteContent.offer.discountPercent}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, discountPercent: Number(e.target.value) } }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-charcoal/70">Minimum Order Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={siteContent.offer.minOrder}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, minOrder: Number(e.target.value) } }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-charcoal/70">Offer Label (shown to customer)</label>
-                  <input
-                    type="text"
-                    value={siteContent.offer.label}
-                    onChange={(e) => setSiteContent(prev => ({ ...prev, offer: { ...prev.offer, label: e.target.value } }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
-                    placeholder="Flat 15% off on orders above ₹600"
-                  />
-                </div>
-              </div>
-              {siteContent.offer.enabled && (
-                <div className="bg-saffron/10 border border-saffron/20 rounded-2xl p-4 text-sm font-bold text-saffron">
-                  Preview: Use code <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-saffron/30">{siteContent.offer.code}</span> to get {siteContent.offer.discountPercent}% off on orders above ₹{siteContent.offer.minOrder}
-                </div>
-              )}
-            </div>
-
-            {/* Save Button */}
-            <button
-              onClick={async () => {
-                await adminStore.saveSiteContent(siteContent);
-                alert('Site content & offers saved successfully! Your website will update instantly.');
-              }}
-              className="w-full bg-saffron hover:bg-saffron/90 text-white font-black text-sm py-4 rounded-2xl cursor-pointer transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <Save className="w-5 h-5" />
-              Save All Site Content &amp; Offers
-            </button>
-          </div>
         )}
 
       </main>
@@ -2529,6 +2340,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                 <p>Thank you for dining! 🌸</p>
                 <p>Cooked with authentic love</p>
                 {printType === 'bill' && <p className="font-bold tracking-widest text-[9px] mt-1.5 uppercase">A DELIGHT IN EVERY BITE</p>}
+                <p className="text-[7px] text-black/40 mt-2 font-mono tracking-widest uppercase">Powered by AARAV WORLD POS</p>
               </div>
 
             </div>
@@ -2675,9 +2487,9 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                 </div>
               </div>
 
-              {/* Dish Image Upload */}
+              {/* Dish Image */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">Dish Image</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">Dish Image URL</label>
                 {menuForm.image && (
                   <div className="w-20 h-20 rounded-xl overflow-hidden border border-charcoal/10 shadow-inner">
                     <img src={menuForm.image} alt="Preview" className="w-full h-full object-cover" />
@@ -2691,22 +2503,6 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                   className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-sans"
                   id="menu-form-image-url"
                 />
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2 bg-saffron/10 hover:bg-saffron/20 text-saffron text-xs font-bold px-4 py-2 rounded-xl cursor-pointer transition-all border border-saffron/20">
-                    {uploadingImage === 'menu-item' ? '⏳ Uploading...' : '📁 Upload Image'}
-                    <input type="file" accept="image/*" className="hidden" disabled={!!uploadingImage} onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        const url = await uploadImage(file, 'menu-item');
-                        setMenuForm(prev => ({ ...prev, image: url }));
-                      } catch (err: any) {
-                        alert(`Upload failed: ${err.message}`);
-                      }
-                    }} />
-                  </label>
-                  <span className="text-[10px] text-charcoal/40">or paste URL above</span>
-                </div>
               </div>
 
               {/* Promotional Badge */}
