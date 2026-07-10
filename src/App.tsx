@@ -365,8 +365,9 @@ export default function App() {
         `\nPlease confirm availability. Thank you!`;
 
       const encodedMessage = encodeURIComponent(message);
+      const waNumber = settings?.whatsappNumber || '917061591831';
       // Opens WhatsApp deep link with structured text
-      window.open(`https://wa.me/917061591831?text=${encodedMessage}`, '_blank');
+      window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
       
       // Reset step
       alert("Opening WhatsApp to send reservation details. Thank you for booking with Curry Delight!");
@@ -386,7 +387,39 @@ export default function App() {
   const handlePlaceOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkoutData.fullName || !checkoutData.phone || (checkoutData.deliveryType === 'delivery' && !checkoutData.address)) {
-      alert("Please fill in all required fields.");
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    // Phone number validation (Indian 10-digit)
+    const phoneDigits = checkoutData.phone.replace(/\D/g, '');
+    if (phoneDigits.length !== 10) {
+      alert('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    // Kitchen closed guard
+    if (settings.isKitchenOpen === false) {
+      alert('Sorry, the kitchen is closed right now. Please try again later.');
+      return;
+    }
+
+    // Sold-out check — prices may have changed since items were added to cart
+    const soldOutNow = cart.filter(c => menuItems.find(m => m.id === c.menuItem.id)?.soldOut);
+    if (soldOutNow.length > 0) {
+      alert(`Sorry! The following item(s) just went sold-out:\n${soldOutNow.map(c => c.menuItem.name).join(', ')}\nPlease remove them from your cart before placing the order.`);
+      return;
+    }
+
+    // Price-drift protection — recalculate using latest menu prices
+    const refreshedCart = cart.map(c => {
+      const latestItem = menuItems.find(m => m.id === c.menuItem.id);
+      return latestItem ? { ...c, menuItem: { ...c.menuItem, price: latestItem.price } } : c;
+    });
+    const refreshedSubtotal = refreshedCart.reduce((s, c) => s + c.menuItem.price * c.quantity, 0);
+    if (refreshedSubtotal !== cartSubtotal) {
+      alert(`Prices have been updated since you added items to cart. The total has been refreshed. Please review and confirm.`);
+      setCart(refreshedCart);
       return;
     }
 
@@ -407,7 +440,7 @@ export default function App() {
       total: cartTotal
     };
 
-    // Save to the Live Order Queue (adminStore)
+    // Save to the Live Order Queue (adminStore) — fire-and-forget with error handling
     adminStore.addOrder({
       customerName: checkoutData.fullName,
       customerPhone: checkoutData.phone,
@@ -419,8 +452,11 @@ export default function App() {
       deliveryFee,
       total: cartTotal,
       items: [...cart],
-      specialInstructions: checkoutData.specialInstructions
-    }, mockOrderId);
+      specialInstructions: checkoutData.specialInstructions,
+      source: 'online'
+    }, mockOrderId).catch(err => {
+      console.error('Order write to Firebase failed:', err);
+    });
 
     setOrderConfirmation(confirmation);
     setCart([]); // Clear cart
@@ -449,7 +485,7 @@ export default function App() {
       `*ITEMS ORDERED:*\n${itemsText}` +
       `----------------------------------------\n` +
       `*Subtotal:* ₹${conf.subtotal}\n` +
-      (conf.discount > 0 ? `*Discount (DELIGHT15):* -₹${conf.discount}\n` : '') +
+      (conf.discount > 0 ? `*Discount (${settings.offer?.code || 'PROMO'}):* -₹${conf.discount}\n` : '') +
       `*Delivery Charge:* ₹${conf.deliveryFee}\n` +
       `*GRAND TOTAL:* ₹${conf.total}\n` +
       `----------------------------------------\n` +
@@ -457,7 +493,8 @@ export default function App() {
       `Please confirm receipt and initiate cooking!`;
 
     const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/917061591831?text=${encodedMessage}`, '_blank');
+    const waNumber = settings?.whatsappNumber || '917061591831';
+    window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
   };
 
   // --- Scroll Spy for sticky CTA header visibility ---
@@ -1630,7 +1667,7 @@ export default function App() {
                       </div>
                       {discountAmount > 0 && (
                         <div className="flex justify-between items-center text-emerald-700 font-bold">
-                          <span>DELIGHT15 Offer (15% OFF)</span>
+                          <span>{settings?.offer?.code || 'PROMO'} Offer ({settings?.offer?.discountPercent || 15}% OFF)</span>
                           <span className="font-bold font-tabular-nums">-₹{discountAmount}</span>
                         </div>
                       )}
@@ -2292,7 +2329,7 @@ export default function App() {
                   </div>
                   {orderConfirmation.discount > 0 && (
                     <div className="flex justify-between text-emerald-700 font-bold">
-                      <span>DELIGHT15 Discount (15%)</span>
+                      <span>{settings?.offer?.code || 'PROMO'} Discount ({settings?.offer?.discountPercent || 15}%)</span>
                       <span className="font-tabular-nums">-₹{orderConfirmation.discount}</span>
                     </div>
                   )}

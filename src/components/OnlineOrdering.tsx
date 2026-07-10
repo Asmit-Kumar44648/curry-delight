@@ -100,16 +100,16 @@ export default function OnlineOrdering({
   }, [cart]);
 
   const discountAmount = useMemo(() => {
-    if (cartSubtotal >= SPECIAL_OFFER.minOrder) {
-      return Math.round(cartSubtotal * 0.15); // 15% discount
+    if (settings?.offer?.enabled && cartSubtotal >= settings.offer.minOrder) {
+      return Math.round(cartSubtotal * (settings.offer.discountPercent / 100));
     }
     return 0;
-  }, [cartSubtotal]);
+  }, [cartSubtotal, settings]);
 
   const deliveryFee = useMemo(() => {
     if (checkoutData.deliveryType === 'pickup' || cart.length === 0) return 0;
-    return cartSubtotal >= 500 ? 0 : 40; // Free delivery above Rs. 500
-  }, [cartSubtotal, checkoutData.deliveryType, cart]);
+    return cartSubtotal >= (settings?.deliveryFeeThreshold || 500) ? 0 : (settings?.deliveryFeeAmount || 40);
+  }, [cartSubtotal, checkoutData.deliveryType, cart, settings]);
 
   const cartTotal = useMemo(() => {
     return Math.max(0, cartSubtotal - discountAmount + deliveryFee);
@@ -149,14 +149,27 @@ export default function OnlineOrdering({
     });
   };
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkoutData.fullName || !checkoutData.phone || (checkoutData.deliveryType === 'delivery' && !checkoutData.address)) {
       alert("Please enter all required fields.");
       return;
     }
 
-    const orderId = `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Phone validation
+    const phoneDigits = checkoutData.phone.replace(/\D/g, '');
+    if (phoneDigits.length !== 10) {
+      alert("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    // Kitchen open check
+    if (settings && settings.isKitchenOpen === false) {
+      alert("Sorry, the kitchen is currently closed. We are not accepting online orders at this moment.");
+      return;
+    }
+
+    const orderId = `CD-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const kitchenBuffer = settings?.kitchenBufferMinutes || 0;
     const baseMin = checkoutData.deliveryType === 'delivery' ? 40 : 15;
     const baseMax = checkoutData.deliveryType === 'delivery' ? 50 : 20;
@@ -173,8 +186,29 @@ export default function OnlineOrdering({
       total: cartTotal
     };
 
-    setConfirmedOrder(confirmation);
-    setCart([]); // Reset Cart
+    try {
+      // Save order to Firestore
+      await adminStore.addOrder({
+        customerName: checkoutData.fullName,
+        customerPhone: checkoutData.phone,
+        customerAddress: checkoutData.deliveryType === 'delivery' ? checkoutData.address : 'Pickup Order',
+        deliveryType: checkoutData.deliveryType,
+        paymentMethod: checkoutData.paymentMethod,
+        subtotal: cartSubtotal,
+        discount: discountAmount,
+        deliveryFee,
+        total: cartTotal,
+        items: [...cart],
+        specialInstructions: checkoutData.specialInstructions,
+        source: 'online'
+      }, orderId);
+
+      setConfirmedOrder(confirmation);
+      setCart([]); // Reset Cart
+    } catch (err) {
+      alert("Failed to submit order. Please try again.");
+      console.error("OnlineOrdering addOrder failed:", err);
+    }
   };
 
   const handleSendWhatsApp = () => {
@@ -198,6 +232,7 @@ export default function OnlineOrdering({
       itemsText += `${idx + 1}. *${item.menuItem.name}* x${item.quantity}${details} - ₹${item.menuItem.price * item.quantity}\n\n`;
     });
 
+    const promoCode = settings?.offer?.code || 'PROMO';
     const message = `*NEW ORDER - CURRY DELIGHT KAHALGAON*\n` +
       `----------------------------------------\n` +
       `*Order ID:* ${confirmedOrder.orderId}\n` +
@@ -210,7 +245,7 @@ export default function OnlineOrdering({
       `*ITEMS ORDERED:*\n${itemsText}` +
       `----------------------------------------\n` +
       `*Subtotal:* ₹${confirmedOrder.subtotal}\n` +
-      (confirmedOrder.discount > 0 ? `*Discount (DELIGHT15):* -₹${confirmedOrder.discount}\n` : '') +
+      (confirmedOrder.discount > 0 ? `*Discount (${promoCode}):* -₹${confirmedOrder.discount}\n` : '') +
       `*Delivery Charge:* ₹${confirmedOrder.deliveryFee}\n` +
       `*GRAND TOTAL:* ₹${confirmedOrder.total}\n` +
       `----------------------------------------\n` +
@@ -218,7 +253,8 @@ export default function OnlineOrdering({
       `Please confirm receipt and initiate cooking!`;
 
     const encoded = encodeURIComponent(message);
-    window.open(`https://wa.me/917061591831?text=${encoded}`, '_blank');
+    const waNumber = settings?.whatsappNumber || '917061591831';
+    window.open(`https://wa.me/${waNumber}?text=${encoded}`, '_blank');
   };
 
   return (
@@ -293,7 +329,7 @@ export default function OnlineOrdering({
                 </div>
                 {confirmedOrder.discount > 0 && (
                   <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>DELIGHT15 Discount (15%)</span>
+                    <span>{settings?.offer?.code || 'PROMO'} Discount ({settings?.offer?.discountPercent || 15}%)</span>
                     <span className="font-tabular-nums">-₹{confirmedOrder.discount}</span>
                   </div>
                 )}
@@ -357,6 +393,16 @@ export default function OnlineOrdering({
             <div className="lg:col-span-12 space-y-8 text-left max-w-5xl mx-auto w-full">
               
               {/* Header */}
+              {settings?.isKitchenOpen === false && (
+                <div className="bg-red-50 border border-red-200 text-red-800 p-5 rounded-3xl text-sm flex items-start gap-3.5 font-bold shadow-xs">
+                  <AlertCircle className="w-5 h-5 shrink-0 text-red-600 animate-pulse mt-0.5" />
+                  <div>
+                    <span className="text-red-700 font-extrabold uppercase font-mono tracking-wide text-[10px] block mb-0.5">🏪 Kitchen Currently Closed</span>
+                    We are not accepting online orders right now. You can still browse our menu, but ordering/checkout is disabled.
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3 text-center md:text-left">
                 <div className="inline-flex items-center space-x-2 bg-saffron/10 px-3 py-1 rounded-full border border-saffron/20 mb-1">
                   <Flame className="w-3.5 h-3.5 text-saffron" />

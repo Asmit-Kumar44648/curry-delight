@@ -21,6 +21,8 @@ export interface AdminOrder {
   total: number;
   status: 'placed' | 'preparing' | 'out_for_delivery' | 'delivered';
   assignedDeliveryBoyId?: string;
+  /** Whether order came from POS counter or online customer */
+  source?: 'pos' | 'online';
 }
 
 export interface AdminReservation {
@@ -75,13 +77,17 @@ export interface AdminSettings {
   offer: SiteOffer;
   deliveryFeeThreshold: number;
   deliveryFeeAmount: number;
+  /** WhatsApp number for order/reservation notifications (with country code, no +) */
+  whatsappNumber: string;
+  /** When false, online ordering shows "Kitchen Closed" — no new orders accepted */
+  isKitchenOpen: boolean;
 }
 
 // ─── Default Settings (used when Firestore has no settings yet) ────────────
 
 const DEFAULT_SETTINGS: AdminSettings = {
   gstEnabled: true,
-  gstin: '24AAAAC1234A1Z5', // default sample placeholder GSTIN
+  gstin: '24AAAAC1234A1Z5',
   cgstRate: 2.5,
   sgstRate: 2.5,
   deliveryFee: 30,
@@ -95,7 +101,9 @@ const DEFAULT_SETTINGS: AdminSettings = {
     label: 'Flat 15% off on orders above ₹600'
   },
   deliveryFeeThreshold: 500,
-  deliveryFeeAmount: 40
+  deliveryFeeAmount: 40,
+  whatsappNumber: '917061591831',
+  isKitchenOpen: true
 };
 
 // ─── Sound Alert Engine ────────────────────────────────────────────────────
@@ -211,7 +219,8 @@ export const adminStore = {
   // ─── Write Methods (write to Firestore, cache updates via subscription) ──
 
   async addOrder(orderData: Omit<AdminOrder, 'id' | 'createdAt' | 'status'>, customId?: string): Promise<AdminOrder> {
-    const id = customId || `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Collision-resistant ID: year + base36 timestamp + 4 random chars
+    const id = customId || `CD-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const newOrder: AdminOrder = {
       ...orderData,
       id,
@@ -455,19 +464,7 @@ export const adminStore = {
         await firebaseService.updateSettings(DEFAULT_SETTINGS);
       }
 
-      // 3. Seed default delivery boys if empty
-      const remoteDeliveryBoys = await firebaseService.getDeliveryBoys();
-      if (remoteDeliveryBoys.length === 0) {
-        console.log("Seeding Firestore with default delivery boys...");
-        const defaultBoys = [
-          { name: 'Rahul Kumar', phone: '9123456789' },
-          { name: 'Amit Singh', phone: '9876543210' },
-          { name: 'Vikash Yadav', phone: '7004123456' }
-        ];
-        for (const boy of defaultBoys) {
-          await firebaseService.addDeliveryBoy(boy);
-        }
-      }
+      // 3. Delivery boys: no fake seeding — owner must add real staff manually
 
       // 4. Set up real-time subscriptions
       const unsub1 = firebaseService.subscribeToMenuItems((items) => {

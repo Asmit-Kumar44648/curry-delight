@@ -101,7 +101,13 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   });
 
   // --- POS (Take Order) State ---
-  const [posCart, setPosCart] = useState<{ item: MenuItem; qty: number; note: string }[]>([]);
+  // Restore cart from sessionStorage to survive accidental tab refreshes
+  const [posCart, setPosCart] = useState<{ item: MenuItem; qty: number; note: string }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('pos_cart_draft');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [posCustomerName, setPosCustomerName] = useState('');
   const [posTableNo, setPosTableNo] = useState('');
   const [posOrderType, setPosOrderType] = useState<'dine-in' | 'takeaway' | 'delivery'>('dine-in');
@@ -498,8 +504,17 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
   // --- POS Handlers ---
   const posSubtotal = posCart.reduce((s, c) => s + c.item.price * c.qty, 0);
-  const posGstAmount = settings.gstEnabled ? Math.round(posSubtotal * ((settings.cgstRate + settings.sgstRate) / 100)) : 0;
-  const posTotal = Math.max(0, posSubtotal - posDiscount + posGstAmount);
+  // GST applied on post-discount amount (correct per Indian GST law)
+  const posNetForTax = Math.max(0, posSubtotal - posDiscount);
+  const posGstAmount = settings.gstEnabled ? Math.round(posNetForTax * ((settings.cgstRate + settings.sgstRate) / 100)) : 0;
+  const posTotal = Math.max(0, posNetForTax + posGstAmount);
+
+  // Persist cart to sessionStorage on every change so refresh doesn't wipe it
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('pos_cart_draft', JSON.stringify(posCart));
+    } catch {}
+  }, [posCart]);
 
   const posAddItem = (item: MenuItem) => {
     setPosCart(prev => {
@@ -522,33 +537,41 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     });
   }, [menuItems, posSearch, posCatFilter, soldOutIds]);
 
-  const handlePlacePosOrder = () => {
+  const handlePlacePosOrder = async () => {
     if (posCart.length === 0) { alert('Add at least one item to place an order.'); return; }
-    const newOrder = adminStore.addOrder({
-      customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
-      customerPhone: '',
-      customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
-      deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
-      tableNumber: posTableNo,
-      paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
-      subtotal: posSubtotal,
-      discount: posDiscount,
-      deliveryFee: 0,
-      total: posTotal,
-      items: posCart.map(c => ({
-        menuItem: c.item,
-        quantity: c.qty,
-        selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
-        specialInstructions: c.note
-      }))
-    });
-    syncAllData();
-    setPosOrderPlaced(newOrder);
-    setPosCart([]);
-    setPosCustomerName('');
-    setPosTableNo('');
-    setPosDiscount(0);
+    try {
+      const newOrder = await adminStore.addOrder({
+        customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
+        customerPhone: '',
+        customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
+        deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
+        tableNumber: posTableNo,
+        paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
+        subtotal: posSubtotal,
+        discount: posDiscount,
+        deliveryFee: 0,
+        total: posTotal,
+        source: 'pos',
+        items: posCart.map(c => ({
+          menuItem: c.item,
+          quantity: c.qty,
+          selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
+          specialInstructions: c.note
+        }))
+      });
+      setPosOrderPlaced(newOrder);
+      // Clear session draft
+      sessionStorage.removeItem('pos_cart_draft');
+      setPosCart([]);
+      setPosCustomerName('');
+      setPosTableNo('');
+      setPosDiscount(0);
+    } catch (err) {
+      alert('Failed to place order. Please try again.');
+      console.error('POS addOrder error:', err);
+    }
   };
+
 
 
   const kdsOrders = useMemo(() => {
@@ -1271,6 +1294,11 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                                     ) : (
                                       <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">🛍️ Takeaway</span>
                                     )}
+                                    {order.source === 'pos' ? (
+                                      <span className="bg-charcoal text-white px-1.5 py-0.5 rounded text-[8px] font-mono font-bold tracking-wider">POS</span>
+                                    ) : (
+                                      <span className="bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold tracking-wider">ONLINE</span>
+                                    )}
                                   </div>
                                 </td>
 
@@ -1947,35 +1975,40 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     </button>
 
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (posCart.length === 0) return;
-                        // Place order & immediately trigger receipt print preview
-                        const order = adminStore.addOrder({
-                          customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
-                          customerPhone: '',
-                          customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
-                          deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
-                          tableNumber: posTableNo,
-                          paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
-                          subtotal: posSubtotal,
-                          discount: posDiscount,
-                          deliveryFee: 0,
-                          total: posTotal,
-                          items: posCart.map(c => ({
-                            menuItem: c.item,
-                            quantity: c.qty,
-                            selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
-                            specialInstructions: c.note
-                          }))
-                        });
-                        syncAllData();
-                        setPosOrderPlaced(order);
-                        setPrintingOrder(order);
-                        setPrintType('bill'); // Directly trigger print simulator modal
-                        setPosCart([]);
-                        setPosCustomerName('');
-                        setPosTableNo('');
-                        setPosDiscount(0);
+                        try {
+                          const order = await adminStore.addOrder({
+                            customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
+                            customerPhone: '',
+                            customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
+                            deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
+                            tableNumber: posTableNo,
+                            paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
+                            subtotal: posSubtotal,
+                            discount: posDiscount,
+                            deliveryFee: 0,
+                            total: posTotal,
+                            source: 'pos',
+                            items: posCart.map(c => ({
+                              menuItem: c.item,
+                              quantity: c.qty,
+                              selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
+                              specialInstructions: c.note
+                            }))
+                          });
+                          setPosOrderPlaced(order);
+                          setPrintingOrder(order);
+                          setPrintType('bill');
+                          sessionStorage.removeItem('pos_cart_draft');
+                          setPosCart([]);
+                          setPosCustomerName('');
+                          setPosTableNo('');
+                          setPosDiscount(0);
+                        } catch (err) {
+                          alert('Failed to place order. Please try again.');
+                          console.error('POS Print addOrder error:', err);
+                        }
                       }}
                       disabled={posCart.length === 0}
                       className={`py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md text-center flex items-center justify-center gap-1.5 cursor-pointer ${
@@ -2757,6 +2790,50 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     className="w-32 bg-cream/15 border border-charcoal/10 rounded-xl p-3 focus:outline-none font-mono font-bold text-sm"
                   />
                   <span className="text-xs text-charcoal/70 font-bold">Minutes Delay</span>
+                </div>
+              </div>
+              {/* WhatsApp Notification settings */}
+              <div className="pb-6 border-b border-charcoal/5 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal block">💬 WhatsApp Notifications Number</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-charcoal/70">Phone Number (with Country Code, no + or spaces)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 917061591831"
+                      value={settings.whatsappNumber || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, whatsappNumber: e.target.value.replace(/\D/g, '') }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5"
+                    />
+                    <p className="text-[10px] text-charcoal/40">This is the number online customer orders/reservations are directed to.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kitchen Opening/Closed toggle */}
+              <div className="pb-6 border-b border-charcoal/5 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal block">🏪 Kitchen Store Status</h3>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1 text-left">
+                    <p className="text-xs font-bold text-charcoal/70">Online Ordering Availability Switch</p>
+                    <p className="text-[11px] text-charcoal/50 leading-relaxed font-normal">
+                      Toggle this off to immediately prevent online customers from placing orders (useful for off-hours, holiday closures, or extreme rush periods).
+                    </p>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setSettings(prev => ({ ...prev, isKitchenOpen: !prev.isKitchenOpen }))}
+                      className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+                        settings.isKitchenOpen 
+                          ? 'bg-emerald-600 text-white' 
+                          : 'bg-red-600 text-white'
+                      }`}
+                    >
+                      KITCHEN STATE: {settings.isKitchenOpen ? 'OPEN (Accepting Orders)' : 'CLOSED (Stopped)'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
