@@ -301,6 +301,11 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         lines.push('\x1B\x21\x30'); // Double height + width
         lines.push('CURRY DELIGHT\n');
         lines.push('\x1B\x21\x00'); // Normal size
+        if (printType === 'bill') {
+          lines.push('\x1B\x21\x08'); // Emphasized
+          lines.push('TAX INVOICE\n');
+          lines.push('\x1B\x21\x00'); // Normal size
+        }
         lines.push('Station Road, Kahalgaon\n');
         lines.push('Ph: +91 7061591831\n');
         lines.push('--------------------------------\n');
@@ -331,6 +336,11 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
           lines.push(`Subtotal :  Rs.${printingOrder.subtotal}\n`);
           if (printingOrder.discount > 0) lines.push(`Discount : -Rs.${printingOrder.discount}\n`);
           if (printingOrder.deliveryFee > 0) lines.push(`Delivery : +Rs.${printingOrder.deliveryFee}\n`);
+          if (settings.gstEnabled) {
+            if (settings.gstin) lines.push(`GSTIN: ${settings.gstin}\n`);
+            lines.push(`CGST (${settings.cgstRate}%) :  Rs.${Math.round(printingOrder.subtotal * (settings.cgstRate / 100))}\n`);
+            lines.push(`SGST (${settings.sgstRate}%) :  Rs.${Math.round(printingOrder.subtotal * (settings.sgstRate / 100))}\n`);
+          }
           lines.push('================================\n');
           lines.push('\x1B\x21\x10'); // Bold
           lines.push(`TOTAL    :  Rs.${printingOrder.total}\n`);
@@ -342,7 +352,11 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         }
 
         lines.push('\x1B\x61\x01'); // Center
-        lines.push('\nThank you! Cook with love.\n');
+        lines.push('\nThank you for dining! \n');
+        lines.push('Cooked with authentic love\n');
+        if (printType === 'bill') {
+           lines.push('\nA DELIGHT IN EVERY BITE\n');
+        }
         lines.push('\x1B\x64\x05'); // Feed 5 lines
         lines.push('\x1D\x56\x41'); // Full cut
 
@@ -2436,6 +2450,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
             >
               <div className="text-center space-y-1">
                 <p className="font-extrabold text-sm uppercase">CURRY DELIGHT</p>
+                {printType === 'bill' && <p className="text-[10px] font-bold tracking-wider text-black">TAX INVOICE</p>}
                 <p className="text-[9px]">Station Road, Kahalgaon</p>
                 <p className="text-[9px]">PH: +91 7061591831</p>
                 <p className="text-[9px]">------------------------</p>
@@ -2513,6 +2528,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
               <div className="text-center pt-3 text-[8px] space-y-0.5">
                 <p>Thank you for dining! 🌸</p>
                 <p>Cooked with authentic love</p>
+                {printType === 'bill' && <p className="font-bold tracking-widest text-[9px] mt-1.5 uppercase">A DELIGHT IN EVERY BITE</p>}
               </div>
 
             </div>

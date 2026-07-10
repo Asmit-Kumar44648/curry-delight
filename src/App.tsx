@@ -1317,12 +1317,33 @@ export default function App() {
             </div>
           </div>
 
-          {/* Col 3: Delivery Zones */}
+          {/* Col 3: Small Map Embed */}
           <div className="space-y-4 text-left">
-            <span className="text-[11px] text-saffron font-bold uppercase tracking-widest font-mono block">Delivery & Pickup</span>
-            <p className="text-cream/70 text-xs leading-relaxed font-normal">
-              We deliver hot within Kahalgaon proper, including NTPC Township, Block Road, and surrounding neighborhoods.
-            </p>
+            <span className="text-[11px] text-saffron font-bold uppercase tracking-widest font-mono block">Find Us On Map</span>
+            <div className="w-full h-28 rounded-2xl overflow-hidden border border-white/10 shadow-md relative group">
+              <iframe 
+                title="Curry Delight Map"
+                src="https://maps.google.com/maps?q=Curry%20Delight,%20Kahalgaon,%20Bihar&t=&z=15&ie=UTF8&iwloc=&output=embed" 
+                className="w-full h-full border-0 grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
+                allowFullScreen={false} 
+                loading="lazy"
+              />
+              <a 
+                href="https://maps.app.goo.gl/fnexsa97XmRvpCwj8" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="absolute inset-0 cursor-pointer"
+                aria-label="View on Google Maps"
+              />
+            </div>
+            <a 
+              href="https://maps.app.goo.gl/fnexsa97XmRvpCwj8" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[10px] text-saffron hover:underline font-bold block"
+            >
+              📍 Open in Google Maps ↗
+            </a>
           </div>
 
           {/* Col 4: Action Buttons */}
