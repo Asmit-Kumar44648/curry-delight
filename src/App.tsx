@@ -82,7 +82,7 @@ export default function App() {
   }, []);
   // --- Dynamic Menu Items, Settings & Site Content ---
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [settings, setSettings] = useState<AdminSettings>(() => adminStore.getSettings());
   const [siteContent, setSiteContent] = useState<SiteContent>(adminStore.getSiteContent());
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
