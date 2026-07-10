@@ -14,6 +14,7 @@ import {
   playNewOrderSound
 } from '../lib/adminStore';
 import { MenuItem } from '../types';
+import { CATEGORY_IMAGES } from '../data';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
@@ -98,6 +99,21 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     badge: '',
     image: ''
   });
+
+  // --- POS (Take Order) State ---
+  const [posCart, setPosCart] = useState<{ item: MenuItem; qty: number; note: string }[]>([]);
+  const [posCustomerName, setPosCustomerName] = useState('');
+  const [posTableNo, setPosTableNo] = useState('');
+  const [posOrderType, setPosOrderType] = useState<'dine-in' | 'takeaway' | 'delivery'>('dine-in');
+  const [posPaymentMethod, setPosPaymentMethod] = useState<'cash' | 'upi' | 'cod'>('cash');
+  const [posSearch, setPosSearch] = useState('');
+  const [posCatFilter, setPosCatFilter] = useState('all');
+  const [posOrderPlaced, setPosOrderPlaced] = useState<AdminOrder | null>(null);
+  const [posDiscount, setPosDiscount] = useState(0);
+  const [logbookViewMode, setLogbookViewMode] = useState<'table' | 'kds'>('table');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'dine-in' | 'pickup' | 'delivery'>('all');
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   // --- Load and Sync Data ---
   const syncAllData = () => {
@@ -451,7 +467,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         isVeg: menuForm.isVeg,
         spiceLevel: menuForm.spiceLevel,
         badge: menuForm.badge || undefined,
-        image: menuForm.image || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120',
+        image: menuForm.image || CATEGORY_IMAGES[menuForm.category] || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
         imagePrompt: 'Minimalist Indian dish'
       });
       alert('New dish added to the catalog!');
@@ -480,7 +496,61 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     }
   };
 
-  // --- Search / Filter / Report Computations & KDS ---
+  // --- POS Handlers ---
+  const posSubtotal = posCart.reduce((s, c) => s + c.item.price * c.qty, 0);
+  const posGstAmount = settings.gstEnabled ? Math.round(posSubtotal * ((settings.cgstRate + settings.sgstRate) / 100)) : 0;
+  const posTotal = Math.max(0, posSubtotal - posDiscount + posGstAmount);
+
+  const posAddItem = (item: MenuItem) => {
+    setPosCart(prev => {
+      const existing = prev.find(c => c.item.id === item.id);
+      if (existing) return prev.map(c => c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c);
+      return [...prev, { item, qty: 1, note: '' }];
+    });
+  };
+  const posRemoveItem = (id: string) => setPosCart(prev => prev.filter(c => c.item.id !== id));
+  const posUpdateQty = (id: string, qty: number) => {
+    if (qty <= 0) { posRemoveItem(id); return; }
+    setPosCart(prev => prev.map(c => c.item.id === id ? { ...c, qty } : c));
+  };
+
+  const posFilteredItems = useMemo(() => {
+    return menuItems.filter(item => {
+      const matchSearch = item.name.toLowerCase().includes(posSearch.toLowerCase());
+      const matchCat = posCatFilter === 'all' || item.category === posCatFilter;
+      return matchSearch && matchCat && !soldOutIds.includes(item.id);
+    });
+  }, [menuItems, posSearch, posCatFilter, soldOutIds]);
+
+  const handlePlacePosOrder = () => {
+    if (posCart.length === 0) { alert('Add at least one item to place an order.'); return; }
+    const newOrder = adminStore.addOrder({
+      customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
+      customerPhone: '',
+      customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
+      deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
+      tableNumber: posTableNo,
+      paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
+      subtotal: posSubtotal,
+      discount: posDiscount,
+      deliveryFee: 0,
+      total: posTotal,
+      items: posCart.map(c => ({
+        menuItem: c.item,
+        quantity: c.qty,
+        selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
+        specialInstructions: c.note
+      }))
+    });
+    syncAllData();
+    setPosOrderPlaced(newOrder);
+    setPosCart([]);
+    setPosCustomerName('');
+    setPosTableNo('');
+    setPosDiscount(0);
+  };
+
+
   const kdsOrders = useMemo(() => {
     return orders
       .filter(o => o.status === 'placed' || o.status === 'preparing')
@@ -499,9 +569,20 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const matchesStatus = orderFilter === 'all' || o.status === orderFilter;
-      return matchesStatus;
+      const matchesType = orderTypeFilter === 'all' || o.deliveryType === orderTypeFilter;
+      
+      const q = orderSearchQuery.toLowerCase().trim();
+      const matchesSearch = !q || 
+        o.id.toLowerCase().includes(q) ||
+        o.customerName.toLowerCase().includes(q) ||
+        o.customerPhone.toLowerCase().includes(q) ||
+        (o.tableNumber && o.tableNumber.toLowerCase().includes(q)) ||
+        (o.customerAddress && o.customerAddress.toLowerCase().includes(q)) ||
+        o.items.some(it => it.menuItem.name.toLowerCase().includes(q));
+        
+      return matchesStatus && matchesType && matchesSearch;
     });
-  }, [orders, orderFilter]);
+  }, [orders, orderFilter, orderTypeFilter, orderSearchQuery]);
 
   const uniqueCategories = useMemo(() => {
     const cats = new Set(menuItems.map(i => i.category));
@@ -775,10 +856,27 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
           }`}
         >
           <ShoppingBag className="w-4 h-4" />
-          <span>Live Order Queue</span>
+          <span>Order Logbook</span>
           {orders.filter(o => o.status === 'placed').length > 0 && (
             <span className="bg-red-500 text-white font-mono text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold animate-pulse">
               {orders.filter(o => o.status === 'placed').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('pos')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'pos'
+              ? 'bg-saffron text-white shadow'
+              : 'text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal'
+          }`}
+        >
+          <Plus className="w-4 h-4" />
+          <span>🧾 Take Order (POS)</span>
+          {posCart.length > 0 && (
+            <span className="bg-saffron text-white font-mono text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
+              {posCart.length}
             </span>
           )}
         </button>
@@ -1012,59 +1110,406 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
           </div>
         )}
 
-        {/* --- TAB 1: LIVE ORDER QUEUE --- */}
+        {/* --- TAB 1: ORDER LOGBOOK & KDS --- */}
         {activeTab === 'orders' && (
           <div className="space-y-6" id="panel-orders">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="flex flex-col md:flex-row md:items-center gap-3">
-                <h2 className="font-display font-black text-2xl text-charcoal flex items-center gap-2">
-                  📋 Live Order Queue Feed
-                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full border border-emerald-200">
-                    {orders.filter(o => o.status !== 'delivered').length} Active
+            
+            {/* Header section with View Toggle */}
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white rounded-3xl p-5 border border-charcoal/10 shadow-xs">
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-display font-black text-2xl text-charcoal">
+                    📋 Order Operations Center
+                  </h2>
+                  <span className="text-[10px] bg-saffron/10 text-saffron border border-saffron/20 font-mono font-bold px-2.5 py-0.5 rounded-full">
+                    {orders.filter(o => o.status !== 'delivered').length} Active Orders
                   </span>
-                </h2>
-
-                {/* KDS Toggle button */}
-                <button
-                  type="button"
-                  onClick={() => setIsKdsMode(!isKdsMode)}
-                  className={`px-4 py-2 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 shadow-xs border ${
-                    isKdsMode 
-                      ? 'bg-charcoal text-white border-charcoal' 
-                      : 'bg-saffron/10 text-saffron border-saffron/20 hover:bg-saffron/20'
-                  }`}
-                  id="btn-kds-toggle"
-                >
-                  <Clock className={`w-4 h-4 ${isKdsMode ? 'animate-spin' : ''}`} />
-                  <span>{isKdsMode ? '🧑‍🍳 Exit Kitchen KDS' : '🧑‍🍳 Kitchen KDS Mode'}</span>
-                </button>
+                </div>
+                <p className="text-xs text-charcoal/50">Track live orders, dispatch riders, manage kitchen queue, and print thermal receipts.</p>
               </div>
 
-              {/* Order filters */}
-              {!isKdsMode && (
-                <div className="flex flex-wrap items-center gap-1.5 bg-white p-1 rounded-2xl border border-charcoal/5 shadow-xs">
-                  {(['all', 'placed', 'preparing', 'out_for_delivery', 'delivered'] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setOrderFilter(st)}
-                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                        orderFilter === st 
-                          ? 'bg-saffron text-white shadow-sm' 
-                          : 'text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal'
-                      }`}
-                    >
-                      {st === 'all' ? 'All Orders' : st === 'placed' ? '🔴 Placed' : st === 'preparing' ? '🟡 preparing' : st === 'out_for_delivery' ? '🔵 Out for Delivery' : '🟢 Delivered'}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/* View mode toggle tabs */}
+              <div className="flex bg-cream/15 p-1 rounded-2xl border border-charcoal/5 self-start lg:self-center">
+                <button
+                  onClick={() => setLogbookViewMode('table')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                    logbookViewMode === 'table'
+                      ? 'bg-charcoal text-white shadow-sm'
+                      : 'text-charcoal/60 hover:text-charcoal'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Logbook Directory</span>
+                </button>
+                <button
+                  onClick={() => setLogbookViewMode('kds')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                    logbookViewMode === 'kds'
+                      ? 'bg-charcoal text-white shadow-sm'
+                      : 'text-charcoal/60 hover:text-charcoal'
+                  }`}
+                >
+                  <Clock className="w-4 h-4" />
+                  <span>Kitchen KDS</span>
+                </button>
+              </div>
             </div>
 
-            {/* Render Kitchen Display Mode Board if active, else standard orders grid */}
-            {isKdsMode ? (
+            {/* Filter and Search Bar - Only shown in Logbook Mode */}
+            {logbookViewMode === 'table' && (
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-5 shadow-xs space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                  
+                  {/* Search bar */}
+                  <div className="relative md:col-span-4">
+                    <Search className="w-4 h-4 text-charcoal/40 absolute left-4 top-3" />
+                    <input
+                      type="text"
+                      placeholder="Search ID, customer name, phone, table..."
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      className="w-full bg-cream/5 border border-charcoal/10 rounded-xl py-2.5 pl-11 pr-4 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-saffron focus:border-saffron"
+                    />
+                  </div>
+
+                  {/* Status Filters */}
+                  <div className="md:col-span-5 flex flex-wrap gap-1">
+                    {(['all', 'placed', 'preparing', 'out_for_delivery', 'delivered'] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setOrderFilter(st)}
+                        className={`px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                          orderFilter === st
+                            ? 'bg-saffron text-white shadow-xs'
+                            : 'bg-cream/10 text-charcoal/60 border border-charcoal/5 hover:bg-cream/25 hover:text-charcoal'
+                        }`}
+                      >
+                        {st === 'all' ? 'All Status' : st === 'placed' ? 'Placed' : st === 'preparing' ? 'Preparing' : st === 'out_for_delivery' ? 'Out' : 'Delivered'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Order Type Filters */}
+                  <div className="md:col-span-3">
+                    <select
+                      value={orderTypeFilter}
+                      onChange={(e) => setOrderTypeFilter(e.target.value as any)}
+                      className="w-full bg-cream/20 text-charcoal text-xs font-bold px-3 py-2.5 rounded-xl border border-charcoal/10 focus:outline-none"
+                    >
+                      <option value="all">All Delivery Types</option>
+                      <option value="dine-in">🍽️ Dine-in</option>
+                      <option value="pickup">🛍️ Takeaway/Pickup</option>
+                      <option value="delivery">🛵 Home Delivery</option>
+                    </select>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {/* Render Logbook table vs KDS cards */}
+            {logbookViewMode === 'table' ? (
+              <div className="bg-white rounded-3xl border border-charcoal/10 overflow-hidden shadow-xs">
+                
+                {/* Responsive table wrapper */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-charcoal/5 border-b border-charcoal/10 text-[10px] font-bold text-charcoal/50 uppercase font-mono tracking-wider">
+                        <th className="py-4 px-5">Date/Time</th>
+                        <th className="py-4 px-4">Order ID</th>
+                        <th className="py-4 px-4">Customer & Type</th>
+                        <th className="py-4 px-4">Items Summary</th>
+                        <th className="py-4 px-4 text-center">Payment</th>
+                        <th className="py-4 px-4 text-right">Total</th>
+                        <th className="py-4 px-4 text-center">Status</th>
+                        <th className="py-4 px-5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-charcoal/5">
+                      {filteredOrders.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="py-16 text-center text-xs text-charcoal/40">
+                            No orders found matching the filter criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredOrders.map((order) => {
+                          const isExpanded = expandedOrderId === order.id;
+                          const formattedDate = new Date(order.createdAt).toLocaleDateString([], { day: '2-digit', month: 'short' });
+                          const formattedTime = new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          
+                          return (
+                            <React.Fragment key={order.id}>
+                              
+                              {/* Main Row */}
+                              <tr 
+                                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                                className={`group hover:bg-cream/15 text-xs transition-colors cursor-pointer ${
+                                  order.status === 'placed' ? 'bg-red-50/20' : ''
+                                }`}
+                              >
+                                {/* Date/Time */}
+                                <td className="py-4 px-5 font-mono whitespace-nowrap">
+                                  <span className="font-bold text-charcoal">{formattedDate}</span>
+                                  <span className="text-[10px] text-charcoal/40 block mt-0.5">{formattedTime}</span>
+                                </td>
+
+                                {/* Order ID */}
+                                <td className="py-4 px-4 font-mono font-bold text-saffron uppercase whitespace-nowrap">
+                                  {order.id}
+                                </td>
+
+                                {/* Customer / Table & Type */}
+                                <td className="py-4 px-4 whitespace-nowrap">
+                                  <div className="font-bold text-charcoal">{order.customerName}</div>
+                                  <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold">
+                                    {order.deliveryType === 'dine-in' ? (
+                                      <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">🍽️ Table {order.tableNumber || '?'}</span>
+                                    ) : order.deliveryType === 'delivery' ? (
+                                      <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">🛵 Delivery</span>
+                                    ) : (
+                                      <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">🛍️ Takeaway</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Items Summary */}
+                                <td className="py-4 px-4 max-w-xs truncate">
+                                  <div className="font-semibold text-charcoal/80">
+                                    {order.items.map(it => `${it.quantity}x ${it.menuItem.name.substring(0, 15)}`).join(', ')}
+                                  </div>
+                                  {order.specialInstructions && (
+                                    <span className="text-[10px] text-red-600 italic block mt-0.5 truncate">
+                                      ⚠️ Note: "{order.specialInstructions}"
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Payment */}
+                                <td className="py-4 px-4 text-center whitespace-nowrap">
+                                  <span className={`text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                                    order.paymentMethod === 'cod' ? 'bg-amber-50 border border-amber-200/50 text-amber-800' : 'bg-emerald-50 border border-emerald-200/50 text-emerald-800'
+                                  }`}>
+                                    {order.paymentMethod === 'cod' ? 'COD' : 'UPI'}
+                                  </span>
+                                </td>
+
+                                {/* Total Amount */}
+                                <td className="py-4 px-4 text-right font-mono font-black text-charcoal whitespace-nowrap">
+                                  ₹{order.total}
+                                </td>
+
+                                {/* Status Progress select */}
+                                <td className="py-4 px-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <select
+                                    value={order.status}
+                                    onChange={(e) => {
+                                      adminStore.updateOrderStatus(order.id, e.target.value as any);
+                                      syncAllData();
+                                    }}
+                                    className={`bg-white text-[10px] font-bold px-2 py-1 rounded-lg border focus:outline-none cursor-pointer ${
+                                      order.status === 'placed' ? 'border-red-300 text-red-700 bg-red-50/50' :
+                                      order.status === 'preparing' ? 'border-amber-300 text-amber-700 bg-amber-50/50' :
+                                      order.status === 'out_for_delivery' ? 'border-indigo-300 text-indigo-700 bg-indigo-50/50' :
+                                      'border-emerald-300 text-emerald-700 bg-emerald-50/50'
+                                    }`}
+                                  >
+                                    <option value="placed">🔴 Placed</option>
+                                    <option value="preparing">🟡 Preparing</option>
+                                    <option value="out_for_delivery">🔵 Out For Delivery</option>
+                                    <option value="delivered">🟢 Delivered</option>
+                                  </select>
+                                </td>
+
+                                {/* Quick actions icon */}
+                                <td className="py-4 px-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      onClick={() => {
+                                        setPrintingOrder(order);
+                                        setPrintType('kot');
+                                      }}
+                                      title="Print KOT"
+                                      className="p-1.5 hover:bg-charcoal/5 rounded-lg text-charcoal/70 hover:text-charcoal cursor-pointer transition-colors"
+                                    >
+                                      <Printer className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setPrintingOrder(order);
+                                        setPrintType('bill');
+                                      }}
+                                      title="Print Bill"
+                                      className="p-1.5 hover:bg-charcoal/5 rounded-lg text-saffron hover:bg-saffron/10 cursor-pointer transition-colors"
+                                    >
+                                      <FileText className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Expanded Detail Panel */}
+                              {isExpanded && (
+                                <tr className="bg-cream/10">
+                                  <td colSpan={8} className="p-5 border-l-4 border-saffron">
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-xs text-charcoal">
+                                      
+                                      {/* Order Items Breakdown */}
+                                      <div className="bg-white rounded-2xl border border-charcoal/10 p-4 space-y-3 shadow-sm">
+                                        <div className="font-mono text-[10px] font-black uppercase tracking-wider text-charcoal/40 border-b border-charcoal/5 pb-2">
+                                          Items Ordered
+                                        </div>
+                                        <div className="space-y-2">
+                                          {order.items.map((it, idx) => (
+                                            <div key={idx} className="flex justify-between items-start border-b border-charcoal/5 pb-2 last:border-0 last:pb-0">
+                                              <div>
+                                                <div className="font-bold text-charcoal">
+                                                  {it.menuItem.name} <span className="text-saffron">x{it.quantity}</span>
+                                                </div>
+                                                {/* Spice & Customizations */}
+                                                {(it.selectedSpice || it.selectedPortion || it.specialInstructions || it.thaliCustomizations) && (
+                                                  <div className="text-[10px] text-charcoal/50 mt-1 pl-2 border-l border-charcoal/10 space-y-0.5 font-mono">
+                                                    {it.selectedSpice && <p>• Spice: {it.selectedSpice.toUpperCase()}</p>}
+                                                    {it.selectedPortion && <p>• Portion: {it.selectedPortion}</p>}
+                                                    {it.thaliCustomizations && (
+                                                      <>
+                                                        {it.thaliCustomizations.currySwap && <p>• curry: {it.thaliCustomizations.currySwap}</p>}
+                                                        {it.thaliCustomizations.breadSwap && <p>• bread: {it.thaliCustomizations.breadSwap}</p>}
+                                                        {it.thaliCustomizations.dessertChoice && <p>• sweet: {it.thaliCustomizations.dessertChoice}</p>}
+                                                      </>
+                                                    )}
+                                                    {it.specialInstructions && <p className="text-red-500 italic">• instructions: "{it.specialInstructions}"</p>}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <span className="font-mono font-bold">₹{it.menuItem.price * it.quantity}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* Customer & Delivery Details */}
+                                      <div className="bg-white rounded-2xl border border-charcoal/10 p-4 space-y-3 shadow-sm">
+                                        <div className="font-mono text-[10px] font-black uppercase tracking-wider text-charcoal/40 border-b border-charcoal/5 pb-2">
+                                          Customer &amp; Rider Details
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p><strong>Customer:</strong> {order.customerName}</p>
+                                          {order.customerPhone && <p><strong>Phone:</strong> {order.customerPhone}</p>}
+                                          {order.deliveryType === 'delivery' && (
+                                            <>
+                                              <p className="leading-relaxed"><strong>Address:</strong> {order.customerAddress}</p>
+                                              
+                                              {/* Rider Assignment */}
+                                              <div className="mt-3 pt-3 border-t border-charcoal/5 space-y-1.5">
+                                                <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-charcoal/50 block"> RIDER ASSIGNED </label>
+                                                <select
+                                                  value={order.assignedDeliveryBoyId || ''}
+                                                  onChange={(e) => {
+                                                    adminStore.assignDeliveryBoy(order.id, e.target.value);
+                                                    syncAllData();
+                                                  }}
+                                                  className="w-full bg-cream/10 border border-charcoal/15 rounded-xl px-3 py-2 text-xs font-semibold"
+                                                >
+                                                  <option value="">-- Choose Rider --</option>
+                                                  {deliveryBoys.map(boy => (
+                                                    <option key={boy.id} value={boy.id}>{boy.name} ({boy.phone})</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Order Summary & Dispatch Actions */}
+                                      <div className="bg-white rounded-2xl border border-charcoal/10 p-4 space-y-3 shadow-sm flex flex-col justify-between">
+                                        <div className="space-y-2">
+                                          <div className="font-mono text-[10px] font-black uppercase tracking-wider text-charcoal/40 border-b border-charcoal/5 pb-2">
+                                            Calculations
+                                          </div>
+                                          <div className="space-y-1 font-mono text-[11px]">
+                                            <div className="flex justify-between"><span>Subtotal:</span><span>₹{order.subtotal}</span></div>
+                                            {order.discount > 0 && <div className="flex justify-between text-red-600"><span>Discount:</span><span>-₹{order.discount}</span></div>}
+                                            {order.deliveryFee > 0 && <div className="flex justify-between"><span>Delivery Fee:</span><span>+₹{order.deliveryFee}</span></div>}
+                                            <div className="flex justify-between border-t border-charcoal/10 pt-1.5 font-bold text-sm text-saffron">
+                                              <span>Grand Total:</span><span>₹{order.total}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Actions panel */}
+                                        <div className="grid grid-cols-2 gap-2 pt-4 border-t border-charcoal/5 mt-3">
+                                          {order.customerPhone && (
+                                            <button
+                                              onClick={() => window.open(getWhatsAppConfirmLink(order), '_blank')}
+                                              className="bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-[10px] uppercase py-2.5 rounded-xl transition-all text-center flex items-center justify-center gap-1 shadow-sm cursor-pointer"
+                                            >
+                                              <span>Confirm WA</span>
+                                            </button>
+                                          )}
+                                          
+                                          {order.deliveryType === 'delivery' && (
+                                            <button
+                                              onClick={() => {
+                                                const db = deliveryBoys.find(b => b.id === order.assignedDeliveryBoyId);
+                                                if (!db) {
+                                                  alert('Please assign a delivery boy from the dropdown first!');
+                                                  return;
+                                                }
+                                                window.open(getWhatsAppDeliveryLink(order, db), '_blank');
+                                              }}
+                                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase py-2.5 rounded-xl transition-all text-center flex items-center justify-center gap-1 shadow-sm cursor-pointer"
+                                            >
+                                              <span>Dispatch Rider</span>
+                                            </button>
+                                          )}
+
+                                          <button
+                                            onClick={() => {
+                                              setPrintingOrder(order);
+                                              setPrintType('kot');
+                                            }}
+                                            className="bg-charcoal hover:bg-charcoal/90 text-white font-bold text-[10px] uppercase py-2.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1"
+                                          >
+                                            <Printer className="w-3.5 h-3.5" />
+                                            <span>KOT Copy</span>
+                                          </button>
+
+                                          <button
+                                            onClick={() => {
+                                              setPrintingOrder(order);
+                                              setPrintType('bill');
+                                            }}
+                                            className="bg-charcoal hover:bg-charcoal/90 text-white font-bold text-[10px] uppercase py-2.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1"
+                                          >
+                                            <Printer className="w-3.5 h-3.5" />
+                                            <span>Bill Receipt</span>
+                                          </button>
+                                        </div>
+
+                                      </div>
+
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+
+                            </React.Fragment>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            ) : (
+              // Kitchen Display Mode Board
               <div className="space-y-6" id="kds-board">
                 <div className="bg-charcoal text-white rounded-3xl p-6 border border-charcoal/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
-                  <div className="space-y-1">
+                  <div className="space-y-1 text-left">
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
                       <h3 className="font-display font-bold text-lg uppercase tracking-wider text-saffron">Kitchen KDS Active Board</h3>
@@ -1073,22 +1518,15 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                   </div>
                   <div className="flex gap-4 items-center">
                     <div className="bg-white/10 px-4 py-2 rounded-xl text-center">
-                      <span className="text-2xl font-black font-mono block text-saffron">{kdsOrders.length}</span>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-white/50">Prep Queue</span>
-                    </div>
-                    <div className="bg-white/10 px-4 py-2 rounded-xl text-center">
-                      <span className="text-2xl font-black font-mono block text-red-400">
-                        {kdsOrders.filter(o => {
-                          const elapsed = Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000);
-                          return elapsed >= 15;
-                        }).length}
+                      <span className="text-2xl font-black font-mono block text-saffron">
+                        {orders.filter(o => o.status === 'placed' || o.status === 'preparing').length}
                       </span>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-white/50">Late (&gt;15m)</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-white/50">Prep Queue</span>
                     </div>
                   </div>
                 </div>
 
-                {kdsOrders.length === 0 ? (
+                {orders.filter(o => o.status === 'placed' || o.status === 'preparing').length === 0 ? (
                   <div className="bg-charcoal/5 border border-charcoal/15 rounded-3xl p-16 text-center space-y-4">
                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
                       🍳
@@ -1098,322 +1536,466 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {kdsOrders.map((order) => {
-                      const elapsed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
-                      const isLate = elapsed >= 15;
-                      const isNew = order.status === 'placed';
+                    {orders
+                      .filter(o => o.status === 'placed' || o.status === 'preparing')
+                      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                      .map((order) => {
+                        const elapsed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
+                        const isLate = elapsed >= 15;
+                        const isNew = order.status === 'placed';
 
-                      return (
-                        <div 
-                          key={order.id} 
-                          className={`bg-white rounded-3xl border-2 overflow-hidden flex flex-col justify-between shadow-md transition-all ${
-                            isLate 
-                              ? 'border-red-600 ring-2 ring-red-600/10 shadow-sm' 
-                              : isNew 
-                                ? 'border-saffron animate-pulse-light shadow-sm' 
-                                : 'border-charcoal/10 shadow-sm'
-                          }`}
-                        >
-                          {/* Ticket Header */}
-                          <div className={`p-4 ${isLate ? 'bg-red-50' : 'bg-charcoal/5'} border-b border-charcoal/10`}>
-                            <div className="flex items-center justify-between">
-                              <span className="font-mono text-lg font-black text-charcoal tracking-tight">{order.id.slice(-6)}</span>
-                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase ${
-                                order.deliveryType === 'delivery' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
-                              }`}>
-                                {order.deliveryType === 'delivery' ? '📍 Delivery' : '🏪 Takeaway'}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between mt-3">
-                              <h4 className="font-display font-black text-lg text-charcoal truncate max-w-[150px]">{order.customerName}</h4>
-                              <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md flex items-center gap-1 ${
-                                isLate ? 'bg-red-600 text-white animate-pulse' : 'bg-charcoal/10 text-charcoal/70'
-                              }`}>
-                                ⏰ {elapsed}m ago
-                              </span>
-                            </div>
-
-                            {order.specialInstructions && (
-                              <div className="mt-2 bg-saffron/10 border border-saffron/30 rounded-lg p-2">
-                                <p className="text-[11px] font-bold text-saffron leading-tight">
-                                  ⚠️ MSG: {order.specialInstructions}
-                                </p>
+                        return (
+                          <div 
+                            key={order.id} 
+                            className={`bg-white rounded-3xl border-2 overflow-hidden flex flex-col justify-between shadow-md transition-all ${
+                              isLate 
+                                ? 'border-red-600 ring-2 ring-red-600/10 shadow-sm' 
+                                : isNew 
+                                  ? 'border-saffron animate-pulse-light shadow-sm' 
+                                  : 'border-charcoal/10 shadow-sm'
+                            }`}
+                          >
+                            {/* Ticket Header */}
+                            <div className={`p-4 ${isLate ? 'bg-red-50' : 'bg-charcoal/5'} border-b border-charcoal/10 text-left`}>
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-lg font-black text-charcoal tracking-tight">{order.id.slice(-6)}</span>
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase ${
+                                  order.deliveryType === 'delivery' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {order.deliveryType === 'delivery' ? '📍 Delivery' : order.deliveryType === 'dine-in' ? '🍽️ Dine-in' : '🛍️ Takeaway'}
+                                </span>
                               </div>
-                            )}
-                          </div>
 
-                          {/* Item Checklist (MASSIVE Typography) */}
-                          <div className="p-5 flex-1 space-y-4">
-                            <span className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest font-mono block">Item Checklist:</span>
-                            <div className="space-y-3">
-                              {order.items.map((item, idx) => {
-                                const checkKey = `${order.id}_${idx}`;
-                                const isChecked = !!kdsCheckedItems[checkKey];
-                                return (
-                                  <div 
-                                    key={idx}
-                                    onClick={() => {
-                                      setKdsCheckedItems(prev => ({
-                                        ...prev,
-                                        [checkKey]: !isChecked
-                                      }));
-                                    }}
-                                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                                      isChecked 
-                                        ? 'bg-emerald-50 border-emerald-200/50' 
-                                        : 'bg-cream/10 border-charcoal/5 hover:bg-cream/20'
-                                    }`}
-                                  >
-                                    <input 
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => {}} // handled by click container
-                                      className="w-5 h-5 rounded border-charcoal/20 text-emerald-600 focus:ring-emerald-500 shrink-0 mt-0.5 cursor-pointer"
-                                    />
-                                    <div className="flex-1">
-                                      <p className={`text-base font-black text-charcoal leading-tight ${isChecked ? 'line-through text-charcoal/40 font-normal' : ''}`}>
-                                        <span className="text-saffron mr-1.5">{item.quantity}x</span>
-                                        {item.name}
-                                      </p>
-                                      {item.selectedCustomizations && item.selectedCustomizations.length > 0 && (
-                                        <p className="text-[10px] text-charcoal/60 font-mono mt-0.5">
-                                          ({item.selectedCustomizations.map(c => `${c.option}`).join(', ')})
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Large Interactive Touch Buttons */}
-                          <div className="p-4 border-t border-charcoal/5 bg-cream/10 flex gap-2">
-                            {order.status === 'placed' ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  adminStore.updateOrderStatus(order.id, 'preparing');
-                                  syncAllData();
-                                }}
-                                className="w-full bg-saffron hover:bg-saffron/90 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
-                              >
-                                🧑‍🍳 START PREPARING (🔥)
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  adminStore.updateOrderStatus(order.id, 'out_for_delivery');
-                                  syncAllData();
-                                }}
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
-                              >
-                                ✅ DONE / MARK READY
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                {filteredOrders.length === 0 ? (
-                  <div className="bg-white border border-charcoal/10 rounded-3xl p-12 text-center space-y-3">
-                    <div className="bg-charcoal/5 text-charcoal/40 p-4 rounded-full inline-flex items-center justify-center">
-                      <ShoppingBag className="w-8 h-8" />
-                    </div>
-                    <h3 className="font-display font-bold text-lg text-charcoal">No orders match this status</h3>
-                    <p className="text-xs text-charcoal/50 max-w-sm mx-auto">Whenever a user submits an order via the customer checkout, it will instantly sound an alert and pop up here!</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredOrders.map((order) => {
-                  const isNew = order.status === 'placed';
-                  return (
-                    <div 
-                      key={order.id}
-                      className={`bg-white rounded-3xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-                        isNew 
-                          ? 'border-red-500 ring-2 ring-red-500/20 shadow-md animate-pulse-light' 
-                          : 'border-charcoal/10 shadow-sm hover:shadow-md'
-                      }`}
-                    >
-                      {/* Top Header Card */}
-                      <div className="p-5 border-b border-charcoal/5 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-bold text-saffron">{order.id}</span>
-                          <span className="text-[10px] text-charcoal/40 font-bold">{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="font-display font-bold text-base text-charcoal leading-none">{order.customerName}</h4>
-                          <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded ${
-                            order.paymentMethod === 'cod' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                            {order.paymentMethod === 'cod' ? 'Cash (COD)' : 'Prepaid (UPI)'}
-                          </span>
-                        </div>
-
-                        <div className="space-y-1 text-xs text-charcoal/60 leading-tight">
-                          <p className="flex items-start gap-1"><Phone className="w-3.5 h-3.5 mt-0.5 shrink-0 text-charcoal/40" /> {order.customerPhone}</p>
-                          <p className="flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-charcoal/40" /> <span className="line-clamp-2">{order.customerAddress}</span></p>
-                        </div>
-                      </div>
-
-                      {/* Middle Body: Items & Customizations */}
-                      <div className="p-5 bg-cream/10 flex-grow space-y-3.5">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-charcoal/40 block font-mono">Items Ordered</span>
-                        <div className="space-y-2">
-                          {order.items.map((it, idx) => (
-                            <div key={idx} className="bg-white p-3 rounded-2xl border border-charcoal/5 text-xs space-y-1">
-                              <div className="flex justify-between font-bold">
-                                <span>{it.menuItem.name} <span className="text-saffron">x{it.quantity}</span></span>
-                                <span className="font-mono font-bold text-charcoal/70">₹{it.menuItem.price * it.quantity}</span>
+                              <div className="flex items-center justify-between mt-3">
+                                <h4 className="font-display font-black text-lg text-charcoal truncate max-w-[150px]">{order.customerName}</h4>
+                                <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                                  isLate ? 'bg-red-600 text-white animate-pulse' : 'bg-charcoal/10 text-charcoal/70'
+                                }`}>
+                                  ⏰ {elapsed}m ago
+                                </span>
                               </div>
-                              {/* Portions & custom options */}
-                              {(it.selectedSpice || it.specialInstructions || it.thaliCustomizations || it.selectedAddons) && (
-                                <div className="text-[10px] text-charcoal/55 bg-cream/30 p-2 rounded-xl border border-dashed border-charcoal/5 space-y-0.5 font-normal">
-                                  {it.selectedSpice && <p>🔥 Spice: <span className="font-bold capitalize text-amber-800">{it.selectedSpice}</span></p>}
-                                  {it.selectedPortion && <p>📦 Portion: <span className="font-bold capitalize">{it.selectedPortion}</span></p>}
-                                  {it.selectedAddons && it.selectedAddons.length > 0 && <p>🧀 Addons: <span className="font-semibold">{it.selectedAddons.join(', ')}</span></p>}
-                                  {it.thaliCustomizations && (
-                                    <div className="space-y-0.5">
-                                      {it.thaliCustomizations.currySwap && <p>🍛 Main: {it.thaliCustomizations.currySwap}</p>}
-                                      {it.thaliCustomizations.breadSwap && <p>🫓 Bread: {it.thaliCustomizations.breadSwap}</p>}
-                                      {it.thaliCustomizations.dessertChoice && <p>🍬 Sweet: {it.thaliCustomizations.dessertChoice}</p>}
-                                      {it.thaliCustomizations.extraRice && <p>🍚 Extra Rice Portion Included</p>}
-                                    </div>
-                                  )}
-                                  {it.specialInstructions && <p className="text-red-600 italic">"Instructions: {it.specialInstructions}"</p>}
+
+                              {order.specialInstructions && (
+                                <div className="mt-2 bg-saffron/10 border border-saffron/30 rounded-lg p-2">
+                                  <p className="text-[11px] font-bold text-saffron leading-tight">
+                                    ⚠️ MSG: {order.specialInstructions}
+                                  </p>
                                 </div>
                               )}
                             </div>
-                          ))}
-                        </div>
 
-                        {order.specialInstructions && (
-                          <div className="bg-red-50 text-red-900 text-[11px] p-2.5 rounded-xl border border-red-100 flex items-start gap-1.5">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                            <p><strong>Chef Note:</strong> "{order.specialInstructions}"</p>
+                            {/* Item Checklist (MASSIVE Typography) */}
+                            <div className="p-5 flex-1 space-y-4 text-left">
+                              <span className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest font-mono block">Item Checklist:</span>
+                              <div className="space-y-3">
+                                {order.items.map((item, idx) => {
+                                  const checkKey = `${order.id}_${idx}`;
+                                  const isChecked = !!kdsCheckedItems[checkKey];
+                                  return (
+                                    <div 
+                                      key={idx}
+                                      onClick={() => {
+                                        setKdsCheckedItems(prev => ({
+                                          ...prev,
+                                          [checkKey]: !isChecked
+                                        }));
+                                      }}
+                                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                        isChecked 
+                                          ? 'bg-emerald-50 border-emerald-200/50' 
+                                          : 'bg-cream/10 border-charcoal/5 hover:bg-cream/20'
+                                      }`}
+                                    >
+                                      <input 
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {}} // handled by click container
+                                        className="w-5 h-5 rounded border-charcoal/20 text-emerald-600 focus:ring-emerald-500 shrink-0 mt-0.5 cursor-pointer"
+                                      />
+                                      <div className="flex-1">
+                                        <p className={`text-base font-black text-charcoal leading-tight ${isChecked ? 'line-through text-charcoal/40 font-normal' : ''}`}>
+                                          <span className="text-saffron mr-1.5">{item.quantity}x</span>
+                                          {item.menuItem.name}
+                                        </p>
+                                        {(item.selectedSpice || item.selectedPortion) && (
+                                          <p className="text-[10px] text-charcoal/60 font-mono mt-0.5">
+                                            ({item.selectedSpice && `Spice: ${item.selectedSpice}`} {item.selectedPortion && `| Size: ${item.selectedPortion}`})
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Large Touch buttons */}
+                            <div className="p-4 border-t border-charcoal/5 bg-cream/10 flex gap-2">
+                              {order.status === 'placed' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    adminStore.updateOrderStatus(order.id, 'preparing');
+                                    syncAllData();
+                                  }}
+                                  className="w-full bg-saffron hover:bg-saffron/90 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
+                                >
+                                  🧑‍🍳 START PREPARING (🔥)
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    adminStore.updateOrderStatus(order.id, 'delivered');
+                                    syncAllData();
+                                  }}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
+                                >
+                                  ✅ DONE / MARK READY
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-
-                      {/* Calculations & Status Assignment */}
-                      <div className="p-5 border-t border-charcoal/5 bg-white space-y-4">
-                        <div className="flex justify-between items-end">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] text-charcoal/50 uppercase block font-bold font-mono">Grand Total</span>
-                            <span className="font-display font-black text-xl text-saffron">₹{order.total}</span>
-                          </div>
-
-                          {/* Dynamic status dropdown */}
-                          <div className="flex flex-col items-end gap-1">
-                            <label className="text-[9px] text-charcoal/40 font-bold uppercase tracking-wider font-mono">STATUS PROGRESS</label>
-                            <select
-                              value={order.status}
-                              onChange={(e) => {
-                                adminStore.updateOrderStatus(order.id, e.target.value as any);
-                                syncAllData();
-                              }}
-                              className="bg-cream/40 text-charcoal text-xs font-bold px-3 py-1.5 rounded-xl border border-charcoal/10 focus:outline-none"
-                            >
-                              <option value="placed">🔴 Placed</option>
-                              <option value="preparing">🟡 Preparing</option>
-                              <option value="out_for_delivery">🔵 Out For Delivery</option>
-                              <option value="delivered">🟢 Delivered</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Delivery Boy Assignment (if type is delivery) */}
-                        {order.deliveryType === 'delivery' && (
-                          <div className="space-y-1.5 bg-cream/30 p-3 rounded-2xl border border-charcoal/5">
-                            <span className="text-[9px] font-mono uppercase tracking-wider text-charcoal/50 block font-bold">Assign Delivery Rider</span>
-                            <select
-                              value={order.assignedDeliveryBoyId || ''}
-                              onChange={(e) => {
-                                adminStore.assignDeliveryBoy(order.id, e.target.value);
-                                syncAllData();
-                              }}
-                              className="w-full bg-white text-charcoal text-xs font-bold px-3 py-2 rounded-xl border border-charcoal/10"
-                            >
-                              <option value="">-- Choose Rider --</option>
-                              {deliveryBoys.map(boy => (
-                                <option key={boy.id} value={boy.id}>{boy.name} ({boy.phone})</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Order action grid - Day One features */}
-                        <div className="grid grid-cols-2 gap-2 pt-2">
-                          <button
-                            onClick={() => {
-                              window.open(getWhatsAppConfirmLink(order), '_blank');
-                            }}
-                            className="bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-[11px] py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1 shadow-sm cursor-pointer"
-                          >
-                            <span>WhatsApp Confirm</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              const db = deliveryBoys.find(b => b.id === order.assignedDeliveryBoyId);
-                              if (!db) {
-                                alert('Please assign a delivery boy from the dropdown first!');
-                                return;
-                              }
-                              window.open(getWhatsAppDeliveryLink(order, db), '_blank');
-                            }}
-                            disabled={order.deliveryType !== 'delivery'}
-                            className={`font-bold text-[11px] py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1 shadow-sm cursor-pointer ${
-                              order.deliveryType === 'delivery' 
-                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
-                                : 'bg-charcoal/5 text-charcoal/30 cursor-not-allowed'
-                            }`}
-                          >
-                            <span>Dispatch Rider</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setPrintingOrder(order);
-                              setPrintType('kot');
-                            }}
-                            className="bg-charcoal hover:bg-charcoal/90 text-white font-bold text-[11px] py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>Print KOT (Kitchen)</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setPrintingOrder(order);
-                              setPrintType('bill');
-                            }}
-                            className="bg-charcoal hover:bg-charcoal/90 text-white font-bold text-[11px] py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>Print Bill</span>
-                          </button>
-                        </div>
-
-                      </div>
-                    </div>
-                  );
-                })}
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             )}
-          </>
+          </div>
         )}
-      </div>
-    )}
+
+        {/* --- TAB 1.5: POS TAKE ORDER --- */}
+        {activeTab === 'pos' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in" id="panel-pos">
+            
+            {/* Left Column: Menu Item Catalog */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              {/* Category slider & search */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-5 shadow-xs space-y-4 text-left">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display font-black text-lg text-charcoal">🍽️ Dish Catalog</h3>
+                  <div className="relative w-48">
+                    <Search className="w-3.5 h-3.5 text-charcoal/40 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Search dish..."
+                      value={posSearch}
+                      onChange={(e) => setPosSearch(e.target.value)}
+                      className="w-full bg-cream/5 border border-charcoal/10 rounded-xl py-1.5 pl-9 pr-3 text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Category tags */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                  <button
+                    onClick={() => setPosCatFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer ${
+                      posCatFilter === 'all'
+                        ? 'bg-charcoal text-white'
+                        : 'bg-cream/10 text-charcoal/60 border border-charcoal/5 hover:bg-cream/20'
+                    }`}
+                  >
+                    All Dishes
+                  </button>
+                  {uniqueCategories.filter(c => c !== 'all').map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setPosCatFilter(cat)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer ${
+                        posCatFilter === cat
+                          ? 'bg-charcoal text-white'
+                          : 'bg-cream/10 text-charcoal/60 border border-charcoal/5 hover:bg-cream/20'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Items Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto pr-1">
+                {posFilteredItems.length === 0 ? (
+                  <div className="col-span-full bg-white border border-charcoal/10 rounded-3xl p-12 text-center text-xs text-charcoal/40">
+                    No dishes found matching filters.
+                  </div>
+                ) : (
+                  posFilteredItems.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => posAddItem(item)}
+                      className="bg-white rounded-2xl border border-charcoal/10 overflow-hidden shadow-xs hover:border-saffron hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                    >
+                      <div>
+                        {/* Item image */}
+                        <div className="h-28 bg-charcoal/5 relative">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            onError={(e) => {
+                              // If customized image doesn't load, use placeholder
+                              e.currentTarget.src = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80';
+                            }}
+                          />
+                          <span className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center p-0.5 rounded-xs bg-white ${item.isVeg ? 'border-green-600' : 'border-red-600'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                          </span>
+                        </div>
+
+                        {/* Title & price */}
+                        <div className="p-3 text-left space-y-1">
+                          <div className="font-bold text-charcoal text-xs line-clamp-1 group-hover:text-saffron transition-colors">
+                            {item.name}
+                          </div>
+                          <p className="text-[10px] text-charcoal/50 line-clamp-1 leading-tight">{item.description}</p>
+                        </div>
+                      </div>
+
+                      <div className="p-3 pt-0 flex items-center justify-between">
+                        <span className="font-mono font-bold text-xs text-charcoal">₹{item.price}</span>
+                        <span className="bg-saffron/10 text-saffron text-[9px] font-black uppercase px-2 py-0.5 rounded">
+                          Add +
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+            </div>
+
+            {/* Right Column: POS Cart & Checkout */}
+            <div className="lg:col-span-5 space-y-6">
+              
+              <div className="bg-white rounded-3xl border border-charcoal/10 p-5 shadow-xs space-y-5 text-left flex flex-col justify-between min-h-[600px]">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-charcoal/5 pb-3">
+                    <h3 className="font-display font-black text-lg text-charcoal flex items-center gap-1.5">
+                      <span>🧾 Active Ticket</span>
+                      {posCart.length > 0 && (
+                        <span className="bg-saffron text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          {posCart.reduce((sum, c) => sum + c.qty, 0)} items
+                        </span>
+                      )}
+                    </h3>
+                    {posCart.length > 0 && (
+                      <button
+                        onClick={() => setPosCart([])}
+                        className="text-[10px] text-red-500 font-bold uppercase tracking-wider hover:underline cursor-pointer"
+                      >
+                        Clear Ticket
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Cart Items List */}
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {posCart.length === 0 ? (
+                      <div className="text-center py-16 text-charcoal/30 text-xs">
+                        Add items from left catalog to start billing.
+                      </div>
+                    ) : (
+                      posCart.map(c => (
+                        <div key={c.item.id} className="bg-cream/15 p-3 rounded-2xl border border-charcoal/5 text-xs space-y-2">
+                          <div className="flex justify-between items-start font-bold">
+                            <span className="text-charcoal pr-3 line-clamp-1">{c.item.name}</span>
+                            <span className="font-mono">₹{c.item.price * c.qty}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            {/* Note input */}
+                            <input
+                              type="text"
+                              placeholder="Add KOT Chef Note (e.g. no onion, extra spicy)"
+                              value={c.note}
+                              onChange={(e) => setPosCart(prev => prev.map(x => x.item.id === c.item.id ? { ...x, note: e.target.value } : x))}
+                              className="bg-white border border-charcoal/10 rounded-lg px-2 py-1 text-[9px] w-36 focus:outline-none"
+                            />
+
+                            {/* Qty selectors */}
+                            <div className="flex items-center bg-white border border-charcoal/10 rounded-xl p-0.5 font-bold">
+                              <button
+                                onClick={() => posUpdateQty(c.item.id, c.qty - 1)}
+                                className="w-5 h-5 flex items-center justify-center text-charcoal hover:bg-charcoal/5 rounded-lg text-[10px]"
+                              >
+                                -
+                              </button>
+                              <span className="w-6 text-center font-mono text-[10px]">{c.qty}</span>
+                              <button
+                                onClick={() => posUpdateQty(c.item.id, c.qty + 1)}
+                                className="w-5 h-5 flex items-center justify-center text-charcoal hover:bg-charcoal/5 rounded-lg text-[10px]"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Customer Checkout Panel */}
+                <div className="space-y-4 border-t border-charcoal/5 pt-4">
+                  
+                  {/* Order Options Grid */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['dine-in', 'takeaway', 'delivery'] as const).map(type => (
+                      <button
+                        key={type}
+                        onClick={() => setPosOrderType(type)}
+                        className={`py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                          posOrderType === type
+                            ? 'bg-charcoal text-white border-charcoal'
+                            : 'bg-white text-charcoal/60 border-charcoal/10 hover:bg-cream/10'
+                        }`}
+                      >
+                        {type === 'dine-in' ? '🍽️ Dine-in' : type === 'takeaway' ? '🛍️ Takeaway' : '🛵 Delivery'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Customer Inputs */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    {posOrderType === 'dine-in' ? (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono ml-0.5">Table No.</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 4"
+                          value={posTableNo}
+                          onChange={(e) => setPosTableNo(e.target.value)}
+                          className="w-full bg-cream/10 border border-charcoal/10 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono ml-0.5">Customer Name</label>
+                        <input
+                          type="text"
+                          placeholder="Walk-in Customer"
+                          value={posCustomerName}
+                          onChange={(e) => setPosCustomerName(e.target.value)}
+                          className="w-full bg-cream/10 border border-charcoal/10 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono ml-0.5">Payment Method</label>
+                      <select
+                        value={posPaymentMethod}
+                        onChange={(e) => setPosPaymentMethod(e.target.value as any)}
+                        className="w-full bg-cream/10 border border-charcoal/10 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
+                      >
+                        <option value="cash">💵 Cash / Collect</option>
+                        <option value="upi">📱 UPI Payment</option>
+                        {posOrderType === 'delivery' && <option value="cod">🛵 Cash on Delivery</option>}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Pricing Calculations & Discount */}
+                  <div className="bg-cream/10 border border-charcoal/5 rounded-2xl p-4 space-y-2.5 font-mono text-[11px]">
+                    <div className="flex justify-between text-charcoal/60">
+                      <span>Subtotal:</span>
+                      <span>₹{posSubtotal}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-charcoal/60">
+                      <span>Discount (₹):</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={posSubtotal}
+                        value={posDiscount || ''}
+                        onChange={(e) => setPosDiscount(Math.min(posSubtotal, Number(e.target.value) || 0))}
+                        placeholder="0"
+                        className="bg-white border border-charcoal/10 rounded-lg px-2 py-0.5 text-right w-16 text-[10px] font-bold font-mono focus:outline-none"
+                      />
+                    </div>
+
+                    {settings.gstEnabled && (
+                      <div className="flex justify-between text-charcoal/60">
+                        <span>GST ({settings.cgstRate + settings.sgstRate}%):</span>
+                        <span>+₹{posGstAmount}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between border-t border-charcoal/10 pt-2 font-bold text-sm text-saffron">
+                      <span>Total Invoice:</span>
+                      <span>₹{posTotal}</span>
+                    </div>
+                  </div>
+
+                  {/* Place Order & Print Buttons */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={handlePlacePosOrder}
+                      disabled={posCart.length === 0}
+                      className={`py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+                        posCart.length === 0
+                          ? 'bg-charcoal/10 text-charcoal/30 cursor-not-allowed shadow-none'
+                          : 'bg-saffron text-white hover:bg-saffron/90'
+                      }`}
+                    >
+                      <span>⚡ Save Order</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (posCart.length === 0) return;
+                        // Place order & immediately trigger receipt print preview
+                        const order = adminStore.addOrder({
+                          customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
+                          customerPhone: '',
+                          customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
+                          deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
+                          tableNumber: posTableNo,
+                          paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
+                          subtotal: posSubtotal,
+                          discount: posDiscount,
+                          deliveryFee: 0,
+                          total: posTotal,
+                          items: posCart.map(c => ({
+                            menuItem: c.item,
+                            quantity: c.qty,
+                            selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
+                            specialInstructions: c.note
+                          }))
+                        });
+                        syncAllData();
+                        setPosOrderPlaced(order);
+                        setPrintingOrder(order);
+                        setPrintType('bill'); // Directly trigger print simulator modal
+                        setPosCart([]);
+                        setPosCustomerName('');
+                        setPosTableNo('');
+                        setPosDiscount(0);
+                      }}
+                      disabled={posCart.length === 0}
+                      className={`py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+                        posCart.length === 0
+                          ? 'bg-charcoal/10 text-charcoal/30 cursor-not-allowed shadow-none'
+                          : 'bg-charcoal text-white hover:bg-charcoal/90'
+                      }`}
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print Receipt</span>
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        )}
 
         {/* --- TAB 2: MENU MANAGEMENT --- */}
         {activeTab === 'menu' && (
