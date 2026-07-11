@@ -11,7 +11,7 @@ import {
 import { 
   adminStore, AdminOrder, AdminReservation, 
   AdminCelebrationEnquiry, DeliveryBoy, AdminSettings,
-  playNewOrderSound
+  playNewOrderSound, playBillPrintedSound
 } from '../lib/adminStore';
 import { MenuItem } from '../types';
 import { CATEGORY_IMAGES } from '../data';
@@ -3067,7 +3067,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
             {/* Print Action Buttons */}
             <div className="space-y-2">
               <button
-                onClick={handleBrowserPrint}
+                onClick={() => { handleBrowserPrint(); playBillPrintedSound(); }}
                 className="w-full bg-charcoal hover:bg-charcoal/90 text-white font-bold py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 text-xs"
               >
                 <Printer className="w-4 h-4" />

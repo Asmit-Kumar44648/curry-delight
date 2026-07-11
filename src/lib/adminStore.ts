@@ -110,41 +110,119 @@ const DEFAULT_SETTINGS: AdminSettings = {
 
 // ─── Sound Alert Engine ────────────────────────────────────────────────────
 
+/** Helper: play a single tone on a shared AudioContext */
+function playTone(
+  ctx: AudioContext,
+  frequency: number,
+  startTime: number,
+  duration: number,
+  gain: number = 0.8,
+  type: OscillatorType = 'square'
+) {
+  const osc = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  const compressor = ctx.createDynamicsCompressor();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, startTime);
+
+  gainNode.gain.setValueAtTime(0, startTime);
+  gainNode.gain.linearRampToValueAtTime(gain, startTime + 0.02);
+  gainNode.gain.setValueAtTime(gain, startTime + duration - 0.05);
+  gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+
+  osc.connect(gainNode);
+  gainNode.connect(compressor);
+  compressor.connect(ctx.destination);
+
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
+/** Speak a text using browser's speech synthesis (Text-to-Speech) */
+function speakText(text: string, pitch = 1.3, rate = 0.95, volume = 1) {
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // Cancel any ongoing speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.pitch = pitch;
+    utterance.rate = rate;
+    utterance.volume = volume;
+    // Prefer a clear English voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
+      || voices.find(v => v.lang.startsWith('en'))
+      || voices[0];
+    if (preferred) utterance.voice = preferred;
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.warn('Speech synthesis error:', e);
+  }
+}
+
+/** 
+ * NEW ORDER ALERT — loud musical fanfare + voice: "Attention! New Order Received!"
+ * Uses a 6-note ascending fanfare in the key of C major at high gain for
+ * maximum audibility across a busy kitchen or counter environment.
+ */
 export function playNewOrderSound() {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
-    
-    // Tone 1
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-    gain1.gain.setValueAtTime(0, ctx.currentTime);
-    gain1.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-    gain1.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.5);
 
-    // Tone 2
+    // 6-note ascending fanfare — C5 D5 E5 G5 A5 C6
+    const notes = [
+      { freq: 523.25, t: 0.00, dur: 0.18 },   // C5
+      { freq: 587.33, t: 0.16, dur: 0.18 },   // D5
+      { freq: 659.25, t: 0.32, dur: 0.18 },   // E5
+      { freq: 783.99, t: 0.48, dur: 0.18 },   // G5
+      { freq: 880.00, t: 0.64, dur: 0.18 },   // A5
+      { freq: 1046.50, t: 0.80, dur: 0.35 },  // C6 — high hold
+    ];
+
+    notes.forEach(({ freq, t, dur }) => {
+      playTone(ctx, freq, ctx.currentTime + t, dur, 0.85, 'square');
+      // Layer a sine underneath for warmth
+      playTone(ctx, freq, ctx.currentTime + t, dur, 0.4, 'sine');
+    });
+
+    // After the fanfare, fire the voice alert
     setTimeout(() => {
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
-      gain2.gain.setValueAtTime(0, ctx.currentTime);
-      gain2.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-      gain2.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(ctx.currentTime);
-      osc2.stop(ctx.currentTime + 0.6);
-    }, 150);
+      speakText('Attention! New order received. Please check the dashboard.', 1.4, 0.9, 1);
+    }, 1300);
+
   } catch (e) {
     console.error("Audio playback error:", e);
+  }
+}
+
+/**
+ * BILL PRINTED ALERT — 3-note confirmation chime + voice: "Bill printed successfully."
+ */
+export function playBillPrintedSound() {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+
+    // 3-note confirmation: G5 → E5 → C5 (descending resolution)
+    const notes = [
+      { freq: 783.99, t: 0.00, dur: 0.2 },  // G5
+      { freq: 659.25, t: 0.18, dur: 0.2 },  // E5
+      { freq: 523.25, t: 0.36, dur: 0.4 },  // C5 hold
+    ];
+
+    notes.forEach(({ freq, t, dur }) => {
+      playTone(ctx, freq, ctx.currentTime + t, dur, 0.7, 'sine');
+    });
+
+    setTimeout(() => {
+      speakText('Bill printed successfully.', 1.2, 1.0, 1);
+    }, 900);
+
+  } catch (e) {
+    console.error("Bill sound error:", e);
   }
 }
 
