@@ -1,44 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
 
-    // Menu items: Anyone can read, only authenticated staff can write
-    match /menu_items/{itemId} {
+    // PUBLIC READ: Menu items needed for customer-facing website
+    match /menu_items/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if request.auth != null;
     }
 
-    // Orders: Anyone can create, only staff can read/update
-    match /orders/{orderId} {
-      allow create: if true;
-      allow read, update, delete: if isAuthenticated();
-    }
-
-    // Reservations: Anyone can create, only staff can read/update
-    match /reservations/{resId} {
-      allow create: if true;
-      allow read, update, delete: if isAuthenticated();
-    }
-
-    // Celebrations: Anyone can create, only staff can read/update
-    match /celebrations/{enqId} {
-      allow create: if true;
-      allow read, update, delete: if isAuthenticated();
-    }
-
-    // Delivery Boys: Only staff can read/write
-    match /delivery_boys/{boyId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Settings: Anyone can read, only staff can write
-    match /settings/{settingId} {
+    // PUBLIC READ: Settings needed for delivery fees, offers, kitchen status
+    match /settings/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if request.auth != null;
+    }
+
+    // PUBLIC CREATE: Customers can place orders from website
+    // ADMIN ONLY: Read, update, delete orders (CMS dashboard)
+    match /orders/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // PUBLIC CREATE: Customers can submit table reservations
+    // ADMIN ONLY: Read and manage reservations
+    match /reservations/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // PUBLIC CREATE: Customers can submit celebration enquiries
+    // ADMIN ONLY: Read and manage celebration bookings
+    // NOTE: Collection name is "celebrations" (NOT celebration_enquiries)
+    match /celebrations/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // ADMIN ONLY: Delivery staff roster
+    match /delivery_boys/{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
