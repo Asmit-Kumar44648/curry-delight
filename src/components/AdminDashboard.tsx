@@ -1758,30 +1758,42 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                               </div>
                             </div>
 
-                            {/* Large Touch buttons */}
+                             {/* Large Touch buttons */}
                             <div className="p-4 border-t border-charcoal/5 bg-cream/10 flex gap-2">
                               {order.status === 'placed' ? (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    adminStore.updateOrderStatus(order.id, 'preparing');
+                                  onClick={async () => {
+                                    await adminStore.updateOrderStatus(order.id, 'preparing');
                                     syncAllData();
                                   }}
-                                  className="w-full bg-saffron hover:bg-saffron/90 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
+                                  className="w-full bg-saffron hover:bg-saffron/90 active:scale-95 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
                                 >
-                                  🧑‍🍳 START PREPARING (🔥)
+                                  🧑‍🍳 START PREPARING 🔥
                                 </button>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    adminStore.updateOrderStatus(order.id, 'delivered');
-                                    syncAllData();
-                                  }}
-                                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
-                                >
-                                  ✅ DONE / MARK READY
-                                </button>
+                                <div className="flex gap-2 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await adminStore.updateOrderStatus(order.id, 'placed');
+                                      syncAllData();
+                                    }}
+                                    className="flex-1 bg-charcoal/10 hover:bg-charcoal/20 active:scale-95 text-charcoal font-bold text-[10px] uppercase tracking-wider py-3 rounded-xl cursor-pointer transition-all text-center"
+                                  >
+                                    ↩ Undo
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await adminStore.updateOrderStatus(order.id, 'delivered');
+                                      syncAllData();
+                                    }}
+                                    className="flex-[3] bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider py-3.5 rounded-xl cursor-pointer transition-all shadow-md text-center flex items-center justify-center gap-1.5"
+                                  >
+                                    ✅ DONE / MARK READY
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>

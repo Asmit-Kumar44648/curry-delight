@@ -898,7 +898,7 @@ export default function App() {
               <div className="lg:col-span-7 mt-8 lg:mt-0">
                 <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/30">
                   <img 
-                    src="https://images.unsplash.com/photo-1517244683960-9bc8265c15af?q=80&w=2000&auto=format&fit=crop" 
+                    src="/hero_restaurant.png" 
                     alt="Curry Delight Restaurant Interior" 
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
@@ -1212,7 +1212,7 @@ export default function App() {
           <div className="lg:col-span-6">
             <div className="relative rounded-3xl overflow-hidden aspect-[3/4] max-h-[550px] w-full shadow-lg border border-charcoal/5 group bg-charcoal/5">
               <img 
-                src="/src/assets/images/royal_thali_1783109108597.jpg" 
+                src="/story_heritage.png" 
                 alt="Our Heritage Royal Thali" 
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
