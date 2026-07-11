@@ -3055,7 +3055,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
               <div className="flex flex-col items-center pt-3 border-t border-dashed border-charcoal/10 bg-cream/10 p-4 mx-auto rounded border-2 border-charcoal/25 w-[260px] border-t-0 -mt-6">
                 <span className="text-[9px] font-bold text-charcoal/50 uppercase tracking-widest font-mono mb-1.5">Scan To Pay (UPI QR)</span>
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=7061591831@ybl&pn=CurryDelight&am=${printingOrder.total}&cu=INR`)}`} 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=bharatpe.9c0q0m0j31267560@unitype&pn=CurryDelight&am=${printingOrder.total}&cu=INR`)}`} 
                   alt="UPI QR Code" 
                   className="w-24 h-24 border border-charcoal/10 p-1.5 rounded-lg bg-white shadow-xs"
                 />
