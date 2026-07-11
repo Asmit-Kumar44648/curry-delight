@@ -23,6 +23,8 @@ export interface AdminOrder {
   total: number;
   status: 'placed' | 'preparing' | 'out_for_delivery' | 'delivered';
   assignedDeliveryBoyId?: string;
+  assignedDeliveryBoyName?: string;
+  assignedDeliveryBoyPhone?: string;
   /** Whether order came from POS counter or online customer */
   source?: 'pos' | 'online';
 }
@@ -317,7 +319,6 @@ export const adminStore = {
       dispatchStoreUpdate();
     }
 
-    playNewOrderSound();
     return newOrder;
   },
 
@@ -337,13 +338,22 @@ export const adminStore = {
   },
 
   async assignDeliveryBoy(orderId: string, deliveryBoyId: string) {
+    const boy = _deliveryBoys.find(b => b.id === deliveryBoyId);
+    const boyName = boy ? boy.name : '';
+    const boyPhone = boy ? boy.phone : '';
+
     // Optimistic local update
     const previousOrders = [..._orders];
-    _orders = _orders.map(o => o.id === orderId ? { ...o, assignedDeliveryBoyId: deliveryBoyId } : o);
+    _orders = _orders.map(o => o.id === orderId ? { 
+      ...o, 
+      assignedDeliveryBoyId: deliveryBoyId,
+      assignedDeliveryBoyName: boyName,
+      assignedDeliveryBoyPhone: boyPhone
+    } : o);
     dispatchStoreUpdate();
 
     try {
-      await firebaseService.assignDeliveryBoy(orderId, deliveryBoyId);
+      await firebaseService.assignDeliveryBoy(orderId, deliveryBoyId, boyName, boyPhone);
     } catch (e) {
       console.error("Firebase assignDeliveryBoy failed, reverting:", e);
       _orders = previousOrders;

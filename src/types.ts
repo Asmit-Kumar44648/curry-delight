@@ -10,6 +10,7 @@ export interface MenuItem {
   imagePrompt: string; // The exact prompt used for generating the AI placeholder image
   badge?: string; // Optional single highlight badge
   soldOut?: boolean; // Whether this item is currently sold out
+  gstRate?: number; // Custom GST percentage (e.g. 5, 12, 18, 0)
 }
 
 export interface CartItem {

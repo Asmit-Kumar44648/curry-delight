@@ -38,6 +38,7 @@ import TableReservation from './components/TableReservation';
 import Celebrations from './components/Celebrations';
 import AdminDashboard from './components/AdminDashboard';
 import { adminStore, AdminSettings, AdminOrder, DeliveryBoy } from './lib/adminStore';
+import { firebaseService } from './lib/firebaseService';
 
 export default function App() {
   // --- Routing State ---
@@ -115,7 +116,7 @@ export default function App() {
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   
   // Customization modal temporary selections
-  const [customSpice, setCustomSpice] = useState<'mild' | 'medium' | 'hot'>('medium');
+  const [customSpice, setCustomSpice] = useState<'mild' | 'medium' | 'hot' | undefined>('medium');
   const [customQty, setCustomQty] = useState(1);
   const [customInstructions, setCustomInstructions] = useState('');
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
@@ -176,6 +177,19 @@ export default function App() {
     total: number;
   } | null>(null);
 
+  const [liveOrder, setLiveOrder] = useState<AdminOrder | null>(null);
+
+  useEffect(() => {
+    if (!orderConfirmation?.orderId) {
+      setLiveOrder(null);
+      return;
+    }
+    const unsub = firebaseService.subscribeToOrder(orderConfirmation.orderId, (order) => {
+      setLiveOrder(order);
+    });
+    return () => unsub();
+  }, [orderConfirmation]);
+
   // --- Active Tab for Scroll Spy / Quick Navigation ---
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'about' | 'gallery' | 'reservation' | 'contact'>('home');
 
@@ -207,12 +221,34 @@ export default function App() {
     return cartSubtotal >= (settings.deliveryFeeThreshold || 500) ? 0 : (settings.deliveryFeeAmount || 40);
   }, [cartSubtotal, checkoutData.deliveryType, cart, settings]);
 
+  const cartCgst = useMemo(() => {
+    if (!settings.gstEnabled || cart.length === 0) return 0;
+    const discountRatio = cartSubtotal > 0 ? (cartSubtotal - discountAmount) / cartSubtotal : 1;
+    let cgst = 0;
+    cart.forEach(item => {
+      const itemGst = item.menuItem.gstRate !== undefined ? item.menuItem.gstRate : (settings.cgstRate + settings.sgstRate);
+      const itemTaxable = (item.menuItem.price * item.quantity) * discountRatio;
+      cgst += itemTaxable * (itemGst / 2) / 100;
+    });
+    return Math.round(cgst);
+  }, [cart, cartSubtotal, discountAmount, settings]);
+
+  const cartSgst = useMemo(() => {
+    if (!settings.gstEnabled || cart.length === 0) return 0;
+    const discountRatio = cartSubtotal > 0 ? (cartSubtotal - discountAmount) / cartSubtotal : 1;
+    let sgst = 0;
+    cart.forEach(item => {
+      const itemGst = item.menuItem.gstRate !== undefined ? item.menuItem.gstRate : (settings.cgstRate + settings.sgstRate);
+      const itemTaxable = (item.menuItem.price * item.quantity) * discountRatio;
+      sgst += itemTaxable * (itemGst / 2) / 100;
+    });
+    return Math.round(sgst);
+  }, [cart, cartSubtotal, discountAmount, settings]);
+
   const cartTotal = useMemo(() => {
     const taxable = Math.max(0, cartSubtotal - discountAmount);
-    const cgst = settings.gstEnabled ? Math.round(taxable * (settings.cgstRate / 100)) : 0;
-    const sgst = settings.gstEnabled ? Math.round(taxable * (settings.sgstRate / 100)) : 0;
-    return Math.max(0, taxable + deliveryFee + cgst + sgst);
-  }, [cartSubtotal, discountAmount, deliveryFee, settings]);
+    return Math.max(0, taxable + deliveryFee + cartCgst + cartSgst);
+  }, [cartSubtotal, discountAmount, deliveryFee, cartCgst, cartSgst]);
 
   const cartItemsCount = useMemo(() => {
     return cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -244,15 +280,16 @@ export default function App() {
     e.stopPropagation(); // Prevent opening modal
     
     setCart(prevCart => {
-      const existing = prevCart.find(c => c.menuItem.id === item.id && c.selectedSpice === (item.spiceLevel || 'medium'));
+      const targetSpice = item.spiceLevel;
+      const existing = prevCart.find(c => c.menuItem.id === item.id && c.selectedSpice === targetSpice);
       if (existing) {
         return prevCart.map(c => 
-          c.menuItem.id === item.id && c.selectedSpice === (item.spiceLevel || 'medium')
+          c.menuItem.id === item.id && c.selectedSpice === targetSpice
             ? { ...c, quantity: c.quantity + 1 }
             : c
         );
       }
-      return [...prevCart, { menuItem: item, quantity: 1, selectedSpice: item.spiceLevel || 'medium', specialInstructions: '' }];
+      return [...prevCart, { menuItem: item, quantity: 1, selectedSpice: targetSpice, specialInstructions: '' }];
     });
   };
 
@@ -275,7 +312,7 @@ export default function App() {
 
   const handleOpenCustomizer = (item: MenuItem) => {
     setCustomizingItem(item);
-    setCustomSpice(item.spiceLevel || 'medium');
+    setCustomSpice(item.spiceLevel);
     setCustomQty(1);
     setCustomInstructions('');
     setSelectedAddons([]);
@@ -555,10 +592,14 @@ export default function App() {
     );
   }
 
-  // Find order in synced orders
-  const currentLiveOrder = orderConfirmation ? orders.find(o => o.id === orderConfirmation.orderId) : null;
+  // Find order in dynamically fetched liveOrder state
+  const currentLiveOrder = liveOrder;
   const currentStatus = currentLiveOrder ? currentLiveOrder.status : 'placed';
-  const assignedBoy = currentLiveOrder?.assignedDeliveryBoyId ? deliveryBoys.find(b => b.id === currentLiveOrder.assignedDeliveryBoyId) : null;
+  const assignedBoy = currentLiveOrder?.assignedDeliveryBoyId ? {
+    id: currentLiveOrder.assignedDeliveryBoyId,
+    name: currentLiveOrder.assignedDeliveryBoyName || 'Delivery Rider',
+    phone: currentLiveOrder.assignedDeliveryBoyPhone || ''
+  } : null;
 
   return (
     <div className="min-h-screen bg-cream font-sans text-ink selection:bg-saffron selection:text-white">
@@ -1606,9 +1647,11 @@ export default function App() {
                           <div className="flex-1 min-w-0 space-y-1">
                             <h4 className="text-xs font-bold text-charcoal truncate">{item.menuItem.name}</h4>
                             <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-charcoal/55">
-                              <span className="font-semibold uppercase font-mono bg-charcoal/5 px-1.5 py-0.5 rounded text-[9px]">
-                                🌶️ {item.selectedSpice === 'hot' ? 'Bihari Spicy' : item.selectedSpice === 'medium' ? 'Medium' : 'Mild'}
-                              </span>
+                              {item.selectedSpice && (
+                                <span className="font-semibold uppercase font-mono bg-charcoal/5 px-1.5 py-0.5 rounded text-[9px]">
+                                  🌶️ {item.selectedSpice === 'hot' ? 'Bihari Spicy' : item.selectedSpice === 'medium' ? 'Medium' : 'Mild'}
+                                </span>
+                              )}
                               {item.specialInstructions && <span className="italic truncate max-w-[120px]">"{item.specialInstructions}"</span>}
                             </div>
 
@@ -1692,12 +1735,12 @@ export default function App() {
                       {settings.gstEnabled && (
                         <>
                           <div className="flex justify-between items-center text-charcoal/75 font-mono text-[11px]">
-                            <span>CGST ({settings.cgstRate}%)</span>
-                            <span className="font-bold font-tabular-nums">₹{Math.round(Math.max(0, cartSubtotal - discountAmount) * (settings.cgstRate / 100))}</span>
+                            <span>CGST</span>
+                            <span className="font-bold font-tabular-nums">₹{cartCgst}</span>
                           </div>
                           <div className="flex justify-between items-center text-charcoal/75 font-mono text-[11px]">
-                            <span>SGST ({settings.sgstRate}%)</span>
-                            <span className="font-bold font-tabular-nums">₹{Math.round(Math.max(0, cartSubtotal - discountAmount) * (settings.sgstRate / 100))}</span>
+                            <span>SGST</span>
+                            <span className="font-bold font-tabular-nums">₹{cartSgst}</span>
                           </div>
                         </>
                       )}
@@ -1937,10 +1980,7 @@ export default function App() {
                 </div>
 
                 {/* Option selection: Spice level */}
-                {(customizingItem.category.toLowerCase().includes('gravies') || 
-                  customizingItem.category.toLowerCase().includes('biryani') || 
-                  customizingItem.category.toLowerCase().includes('starters') || 
-                  customizingItem.category === 'Heritage Thalis') && (
+                {customizingItem.spiceLevel !== undefined && (
                   <div className="space-y-3">
                     <label className="text-xs font-bold uppercase tracking-wider text-charcoal/60 block">Specify Heat/Spice Level</label>
                     <div className="grid grid-cols-3 gap-3">
@@ -2329,7 +2369,7 @@ export default function App() {
                     <div key={idx} className="flex justify-between font-medium">
                       <span>
                         {item.menuItem.name} <strong className="text-charcoal">x{item.quantity}</strong>
-                        <span className="text-[10px] text-charcoal/50 ml-1.5">({item.selectedSpice})</span>
+                        {item.selectedSpice && <span className="text-[10px] text-charcoal/50 ml-1.5">({item.selectedSpice})</span>}
                       </span>
                       <span className="font-bold font-tabular-nums text-charcoal">₹{item.menuItem.price * item.quantity}</span>
                     </div>

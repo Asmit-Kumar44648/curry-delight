@@ -89,7 +89,17 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [menuModalType, setMenuModalType] = useState<'add' | 'edit'>('add');
   const [editingItemId, setEditingItemId] = useState('');
-  const [menuForm, setMenuForm] = useState({
+  const [menuForm, setMenuForm] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    price: number;
+    isVeg: boolean;
+    spiceLevel: 'mild' | 'medium' | 'hot' | undefined;
+    badge: string;
+    image: string;
+    gstRate: number | undefined;
+  }>({
     name: '',
     description: '',
     category: 'Heritage Thalis',
@@ -97,7 +107,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     isVeg: true,
     spiceLevel: 'medium' as 'mild' | 'medium' | 'hot',
     badge: '',
-    image: ''
+    image: '',
+    gstRate: undefined
   });
 
   // --- POS (Take Order) State ---
@@ -308,7 +319,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     });
     
     lines.push(centerText('CURRY DELIGHT', width));
-    lines.push(centerText('POWERED BY AARAV WORLD POSS', width));
+    lines.push(centerText('POWERED BY AARAV WORLD POS', width));
     return lines.join('\n');
   };
 
@@ -521,6 +532,14 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   };
 
   // --- Menu Item Handlers ---
+  // Categories where spice level is not applicable (non-savory items)
+  const NON_SPICY_CATEGORIES = [
+    'Desserts & Accompaniments',
+    'Mocktails, Shakes & Beverages',
+    'Indian Breads',
+    'Desserts & Beverages'
+  ];
+
   const handleOpenAddMenu = () => {
     setMenuModalType('add');
     setMenuForm({
@@ -531,7 +550,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       isVeg: true,
       spiceLevel: 'medium',
       badge: '',
-      image: ''
+      image: '',
+      gstRate: undefined
     });
     setIsMenuModalOpen(true);
   };
@@ -545,9 +565,10 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
       category: item.category,
       price: item.price,
       isVeg: item.isVeg,
-      spiceLevel: item.spiceLevel || 'medium',
+      spiceLevel: item.spiceLevel,
       badge: item.badge || '',
-      image: item.image || ''
+      image: item.image || '',
+      gstRate: item.gstRate
     });
     setIsMenuModalOpen(true);
   };
@@ -569,7 +590,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         spiceLevel: menuForm.spiceLevel,
         badge: menuForm.badge || undefined,
         image: menuForm.image || CATEGORY_IMAGES[menuForm.category] || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
-        imagePrompt: 'Minimalist Indian dish'
+        imagePrompt: 'Minimalist Indian dish',
+        ...(menuForm.gstRate !== undefined ? { gstRate: menuForm.gstRate } : {})
       });
       alert('New dish added to the catalog!');
     } else {
@@ -581,7 +603,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         isVeg: menuForm.isVeg,
         spiceLevel: menuForm.spiceLevel,
         badge: menuForm.badge || undefined,
-        ...(menuForm.image ? { image: menuForm.image } : {})
+        ...(menuForm.image ? { image: menuForm.image } : {}),
+        ...(menuForm.gstRate !== undefined ? { gstRate: menuForm.gstRate } : { gstRate: undefined })
       });
       alert('Menu item updated successfully!');
     }
@@ -2105,7 +2128,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                   </div>
 
                   {/* Place Order & Print Buttons */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-2">
                     <button
                       onClick={handlePlacePosOrder}
                       disabled={posCart.length === 0}
@@ -2115,9 +2138,10 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                           : 'bg-saffron text-white hover:bg-saffron/90'
                       }`}
                     >
-                      <span>⚡ Save Order</span>
+                      <span>⚡ Save Order Only</span>
                     </button>
 
+                    {/* Print KOT Button */}
                     <button
                       onClick={async () => {
                         if (posCart.length === 0) return;
@@ -2137,7 +2161,55 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                             items: posCart.map(c => ({
                               menuItem: c.item,
                               quantity: c.qty,
-                              selectedSpice: (c.item.spiceLevel || 'medium') as 'mild' | 'medium' | 'hot',
+                              selectedSpice: c.item.spiceLevel,
+                              specialInstructions: c.note
+                            }))
+                          });
+                          setPosOrderPlaced(order);
+                          setPrintingOrder(order);
+                          setPrintType('kot');
+                          sessionStorage.removeItem('pos_cart_draft');
+                          setPosCart([]);
+                          setPosCustomerName('');
+                          setPosTableNo('');
+                          setPosDiscount(0);
+                        } catch (err) {
+                          alert('Failed to place order. Please try again.');
+                          console.error('POS KOT addOrder error:', err);
+                        }
+                      }}
+                      disabled={posCart.length === 0}
+                      className={`py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+                        posCart.length === 0
+                          ? 'bg-charcoal/10 text-charcoal/30 cursor-not-allowed shadow-none'
+                          : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                      }`}
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>🍳 Print KOT</span>
+                    </button>
+
+                    {/* Print Bill Button */}
+                    <button
+                      onClick={async () => {
+                        if (posCart.length === 0) return;
+                        try {
+                          const order = await adminStore.addOrder({
+                            customerName: posCustomerName || (posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : 'Walk-in'),
+                            customerPhone: '',
+                            customerAddress: posOrderType === 'dine-in' ? `Table ${posTableNo || '?'}` : posOrderType === 'takeaway' ? 'Takeaway' : 'Counter Delivery',
+                            deliveryType: posOrderType === 'delivery' ? 'delivery' : 'pickup',
+                            tableNumber: posTableNo,
+                            paymentMethod: posPaymentMethod === 'cash' ? 'cod' : 'upi',
+                            subtotal: posSubtotal,
+                            discount: posDiscount,
+                            deliveryFee: 0,
+                            total: posTotal,
+                            source: 'pos',
+                            items: posCart.map(c => ({
+                              menuItem: c.item,
+                              quantity: c.qty,
+                              selectedSpice: c.item.spiceLevel,
                               specialInstructions: c.note
                             }))
                           });
@@ -2162,7 +2234,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                       }`}
                     >
                       <Printer className="w-4 h-4" />
-                      <span>Print Receipt</span>
+                      <span>🧾 Print Bill</span>
                     </button>
                   </div>
 
@@ -3202,20 +3274,50 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                   </div>
                 </div>
 
-                {/* Spice Level */}
+                {/* Spice Level - hidden for non-spicy categories */}
+                {!NON_SPICY_CATEGORIES.includes(menuForm.category) ? (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">Spiciness Heat</label>
+                    <select
+                      value={menuForm.spiceLevel ?? 'medium'}
+                      onChange={(e) => setMenuForm(prev => ({ ...prev, spiceLevel: e.target.value as 'mild' | 'medium' | 'hot' }))}
+                      className="w-full border border-charcoal/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-semibold"
+                      id="menu-form-spice"
+                    >
+                      <option value="mild">🌶️ Mild</option>
+                      <option value="medium">🌶️🌶️ Medium</option>
+                      <option value="hot">🌶️🌶️🌶️ Bihari Spicy</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">Spiciness Heat</label>
+                    <div className="border border-charcoal/10 rounded-xl px-3 py-2 text-xs text-charcoal/40 bg-cream/10 font-semibold italic">
+                      N/A — Not applicable for this category
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Per-Item GST Rate + Dish Image */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                {/* Per-item GST Rate */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">Spiciness Heat</label>
-                  <select
-                    value={menuForm.spiceLevel}
-                    onChange={(e) => setMenuForm(prev => ({ ...prev, spiceLevel: e.target.value as 'mild' | 'medium' | 'hot' }))}
-                    className="w-full border border-charcoal/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-semibold"
-                    id="menu-form-spice"
-                  >
-                    <option value="mild">🌶️ Mild</option>
-                    <option value="medium">🌶️🌶️ Medium</option>
-                    <option value="hot">🌶️🌶️🌶️ Bihari Spicy</option>
-                  </select>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 ml-1">GST Rate % <span className="text-charcoal/30 normal-case font-normal">(optional, overrides global)</span></label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="28"
+                    step="0.5"
+                    placeholder={`Default (${settings.cgstRate + settings.sgstRate}%)`}
+                    value={menuForm.gstRate ?? ''}
+                    onChange={(e) => setMenuForm(prev => ({ ...prev, gstRate: e.target.value !== '' ? parseFloat(e.target.value) : undefined }))}
+                    className="w-full border border-charcoal/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-cream/5 font-mono font-bold"
+                    id="menu-form-gst-rate"
+                  />
                 </div>
+                {/* Price (duplicate col 2 — this is the existing Price col; no change needed) */}
+                <div />
               </div>
 
               {/* Dish Image */}
@@ -3248,6 +3350,7 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                   id="menu-form-badge"
                 />
               </div>
+
 
               {/* Submit Buttons */}
               <div className="flex gap-3 pt-4 border-t border-charcoal/5">

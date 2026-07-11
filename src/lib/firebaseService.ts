@@ -111,14 +111,31 @@ export const firebaseService = {
     });
   },
 
+  subscribeToOrder(orderId: string, callback: (order: AdminOrder | null) => void) {
+    if (!db) return () => {};
+    return onSnapshot(doc(db, 'orders', orderId), (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ id: docSnap.id, ...docSnap.data() } as AdminOrder);
+      } else {
+        callback(null);
+      }
+    }, (error) => {
+      console.error(`Order subscription error for ${orderId}:`, error);
+    });
+  },
+
   async updateOrderStatus(orderId: string, status: AdminOrder['status']): Promise<void> {
     ensureDb();
     await updateDoc(doc(db, 'orders', orderId), { status });
   },
 
-  async assignDeliveryBoy(orderId: string, deliveryBoyId: string): Promise<void> {
+  async assignDeliveryBoy(orderId: string, deliveryBoyId: string, deliveryBoyName?: string, deliveryBoyPhone?: string): Promise<void> {
     ensureDb();
-    await updateDoc(doc(db, 'orders', orderId), { assignedDeliveryBoyId: deliveryBoyId });
+    await updateDoc(doc(db, 'orders', orderId), { 
+      assignedDeliveryBoyId: deliveryBoyId,
+      assignedDeliveryBoyName: deliveryBoyName || '',
+      assignedDeliveryBoyPhone: deliveryBoyPhone || ''
+    });
   },
 
   // ─── Reservations ────────────────────────────────────────────────────────
