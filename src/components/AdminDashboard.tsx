@@ -530,10 +530,16 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
   };
 
   const posFilteredItems = useMemo(() => {
-    return menuItems.filter(item => {
+    const items = menuItems.filter(item => {
       const matchSearch = item.name.toLowerCase().includes(posSearch.toLowerCase());
       const matchCat = posCatFilter === 'all' || item.category === posCatFilter;
-      return matchSearch && matchCat && !soldOutIds.includes(item.id);
+      return matchSearch && matchCat;
+    });
+    // Sort so available items are first, and sold-out items are last
+    return [...items].sort((a, b) => {
+      const aSold = soldOutIds.includes(a.id) ? 1 : 0;
+      const bSold = soldOutIds.includes(b.id) ? 1 : 0;
+      return aSold - bSold;
     });
   }, [menuItems, posSearch, posCatFilter, soldOutIds]);
 
@@ -1751,46 +1757,77 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     No dishes found matching filters.
                   </div>
                 ) : (
-                  posFilteredItems.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => posAddItem(item)}
-                      className="bg-white rounded-2xl border border-charcoal/10 overflow-hidden shadow-xs hover:border-saffron hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                    >
-                      <div>
-                        {/* Item image */}
-                        <div className="h-28 bg-charcoal/5 relative">
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            onError={(e) => {
-                              // If customized image doesn't load, use placeholder
-                              e.currentTarget.src = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80';
-                            }}
-                          />
-                          <span className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center p-0.5 rounded-xs bg-white ${item.isVeg ? 'border-green-600' : 'border-red-600'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
-                          </span>
-                        </div>
-
-                        {/* Title & price */}
-                        <div className="p-3 text-left space-y-1">
-                          <div className="font-bold text-charcoal text-xs line-clamp-1 group-hover:text-saffron transition-colors">
-                            {item.name}
+                  posFilteredItems.map(item => {
+                    const isSold = soldOutIds.includes(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          if (!isSold) {
+                            posAddItem(item);
+                          }
+                        }}
+                        className={`bg-white rounded-2xl border overflow-hidden shadow-xs transition-all flex flex-col justify-between ${
+                          isSold 
+                            ? 'border-charcoal/5 opacity-55 grayscale cursor-default' 
+                            : 'border-charcoal/10 hover:border-saffron hover:shadow-md cursor-pointer group'
+                        }`}
+                      >
+                        <div>
+                          {/* Item image */}
+                          <div className="h-28 bg-charcoal/5 relative">
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className={`w-full h-full object-cover transition-transform duration-500 ${!isSold && 'group-hover:scale-105'}`}
+                              onError={(e) => {
+                                // If customized image doesn't load, use placeholder
+                                e.currentTarget.src = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80';
+                              }}
+                            />
+                            {isSold ? (
+                              <span className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded font-mono tracking-wider">
+                                SOLD OUT
+                              </span>
+                            ) : (
+                              <span className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center p-0.5 rounded-xs bg-white ${item.isVeg ? 'border-green-600' : 'border-red-600'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[10px] text-charcoal/50 line-clamp-1 leading-tight">{item.description}</p>
+
+                          {/* Title & price */}
+                          <div className="p-3 text-left space-y-1">
+                            <div className={`font-bold text-xs line-clamp-1 transition-colors ${isSold ? 'text-charcoal/40 line-through' : 'text-charcoal group-hover:text-saffron'}`}>
+                              {item.name}
+                            </div>
+                            <p className="text-[10px] text-charcoal/50 line-clamp-1 leading-tight">{item.description}</p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 pt-0 flex items-center justify-between">
+                          <span className="font-mono font-bold text-xs text-charcoal">₹{item.price}</span>
+                          {isSold ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                adminStore.toggleSoldOut(item.id);
+                                syncAllData();
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black uppercase px-2 py-1 rounded cursor-pointer transition-all shadow-xs"
+                            >
+                              Restore
+                            </button>
+                          ) : (
+                            <span className="bg-saffron/10 text-saffron text-[9px] font-black uppercase px-2 py-0.5 rounded">
+                              Add +
+                            </span>
+                          )}
                         </div>
                       </div>
-
-                      <div className="p-3 pt-0 flex items-center justify-between">
-                        <span className="font-mono font-bold text-xs text-charcoal">₹{item.price}</span>
-                        <span className="bg-saffron/10 text-saffron text-[9px] font-black uppercase px-2 py-0.5 rounded">
-                          Add +
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
