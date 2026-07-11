@@ -898,8 +898,8 @@ export default function App() {
               <div className="lg:col-span-7 mt-8 lg:mt-0">
                 <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/30">
                   <img 
-                    src="/hero_restaurant.png" 
-                    alt="Curry Delight Restaurant Interior" 
+                    src="/real_interior_wide.png" 
+                    alt="Curry Delight Restaurant Dining Space in Kahalgaon" 
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
                   />
@@ -1212,8 +1212,8 @@ export default function App() {
           <div className="lg:col-span-6">
             <div className="relative rounded-3xl overflow-hidden aspect-[3/4] max-h-[550px] w-full shadow-lg border border-charcoal/5 group bg-charcoal/5">
               <img 
-                src="/story_heritage.png" 
-                alt="Our Heritage Royal Thali" 
+                src="/real_interior_2.png" 
+                alt="Curry Delight Restaurant Authentic Seating in Kahalgaon" 
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
               />
@@ -1264,11 +1264,11 @@ export default function App() {
 
       {/* 7. GALLERY SECTION */}
       <Gallery galleryRef={galleryRef} images={[
-        { url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?q=80&w=2000&auto=format&fit=crop', title: 'Samosa Chaat', category: 'Starters' },
-        { url: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?q=80&w=2000&auto=format&fit=crop', title: 'Chicken Biryani', category: 'Main Course' },
-        { url: 'https://images.unsplash.com/photo-1512485800893-b08ec1ea59b1?q=80&w=2000&auto=format&fit=crop', title: 'Paneer Butter Masala', category: 'Main Course' },
-        { url: 'https://images.unsplash.com/photo-1626074353765-517a681e40be?q=80&w=2000&auto=format&fit=crop', title: 'Tandoori Chicken', category: 'Tandoor' },
-        { url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?q=80&w=2000&auto=format&fit=crop', title: 'Gulab Jamun', category: 'Desserts' }
+        { url: '/real_interior_1.png', title: 'Comfortable Premium Dining', category: 'Interior' },
+        { url: '/real_interior_2.png', title: 'Festive Table Settings', category: 'Interior' },
+        { url: '/real_interior_wide.png', title: 'Warm Family Environment', category: 'Interior' },
+        { url: '/real_counter.jpg', title: 'Fresh Drinks & Counter Bar', category: 'Drinks' },
+        { url: '/real_reception.png', title: 'Welcome Reception Counter', category: 'Reception' }
       ]} />
 
 
