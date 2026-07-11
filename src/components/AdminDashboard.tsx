@@ -252,6 +252,162 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     return `https://wa.me/${db.phone.startsWith('91') ? db.phone : '91' + db.phone}?text=${encodeURIComponent(text)}`;
   };
 
+  // --- KOT & Bill Format Helpers (Exact 32 chars spacing & alignment) ---
+  const formatReceiptDateTime = (dateVal: number | string) => {
+    const d = new Date(dateVal);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const yy = d.getFullYear().toString().substring(2);
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    
+    let hours = d.getHours();
+    const minutes = pad(d.getMinutes());
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const hh = pad(hours);
+    
+    return `${dd}/${mm}/${yy} ${hh}:${minutes} ${ampm}`;
+  };
+
+  const centerText = (text: string, width = 32) => {
+    if (text.length >= width) return text.substring(0, width);
+    const left = Math.floor((width - text.length) / 2);
+    const right = width - text.length - left;
+    return ' '.repeat(left) + text + ' '.repeat(right);
+  };
+
+  const formatLeftRight = (left: string, right: string, width = 32) => {
+    const spaceCount = width - left.length - right.length;
+    if (spaceCount <= 0) return left.substring(0, width - right.length - 1) + ' ' + right;
+    return left + ' '.repeat(spaceCount) + right;
+  };
+
+  const generateKOTText = (order: AdminOrder) => {
+    const width = 32;
+    const lines: string[] = [];
+    
+    const kotNo = order.id.split('-').pop() || '2';
+    lines.push(`KOT No: ${kotNo}`);
+    lines.push(`Date: ${formatReceiptDateTime(order.createdAt)}`);
+    lines.push(`Bill No: ${order.id.split('-').pop() || '519'}`);
+    
+    const tableVal = order.tableNumber ? `Table ${order.tableNumber}` : order.customerAddress.includes('Table') ? order.customerAddress : 'Walk-in';
+    lines.push(`Table: ${tableVal}`);
+    
+    order.items.forEach(it => {
+      lines.push(`${it.menuItem.name} (${it.quantity})`);
+      if (it.selectedSpice && it.selectedSpice !== 'medium') {
+        lines.push(` *Spice: ${it.selectedSpice.toUpperCase()}`);
+      }
+      if (it.specialInstructions) {
+        lines.push(` *Note: ${it.specialInstructions}`);
+      }
+    });
+    
+    lines.push(centerText('CURRY DELIGHT', width));
+    lines.push(centerText('POWERED BY AARAV WORLD POSS', width));
+    return lines.join('\n');
+  };
+
+  const generateBillText = (order: AdminOrder, currentSettings: AdminSettings) => {
+    const width = 32;
+    const lines: string[] = [];
+    
+    lines.push(centerText('Curry Delight Restaurant', width));
+    lines.push(centerText('A Delight In Every Bite', width));
+    
+    const shortNo = order.id.split('-').pop() || '551';
+    lines.push(centerText(shortNo, width));
+    
+    const address = "Curry Delight Restaurant, ShivParvati Nagar, Block Road, Kahalgaon, Bhagalpur, BIHAR,813203";
+    const wrapText = (text: string, limit: number) => {
+      const words = text.split(' ');
+      const wrapped: string[] = [];
+      let currentLine = '';
+      words.forEach(word => {
+        if ((currentLine + word).length > limit) {
+          wrapped.push(currentLine.trim());
+          currentLine = word + ' ';
+        } else {
+          currentLine += word + ' ';
+        }
+      });
+      if (currentLine.trim()) wrapped.push(currentLine.trim());
+      return wrapped;
+    };
+    
+    const wrappedAddress = wrapText(address, width);
+    wrappedAddress.forEach(ln => lines.push(centerText(ln, width)));
+    
+    lines.push(`GST Number: ${currentSettings.gstin || '10ESRPK5680M1Z5'}`);
+    lines.push(`FSSAI Number: 20426122000051`);
+    lines.push(`Phone: ${currentSettings.whatsappNumber || '7061591831'}`);
+    lines.push(`Bill No: ${order.id}`);
+    lines.push(`Created On: ${formatReceiptDateTime(order.createdAt)}`);
+    
+    const tableVal = order.tableNumber ? `Table ${order.tableNumber}` : order.customerAddress.includes('Table') ? order.customerAddress : 'Walk-in';
+    lines.push(`Bill To: ${tableVal}`);
+    
+    lines.push('Item Name');
+    lines.push(formatLeftRight('Qty     Rate', 'Total', width));
+    lines.push('-'.repeat(width));
+    
+    order.items.forEach(it => {
+      lines.push(it.menuItem.name);
+      const qty = it.quantity.toString();
+      const rate = it.menuItem.price.toString();
+      
+      const gstInclusivePrice = currentSettings.gstEnabled 
+        ? Math.round(it.menuItem.price * (1 + (currentSettings.cgstRate + currentSettings.sgstRate) / 100))
+        : it.menuItem.price;
+      const totalVal = (gstInclusivePrice * it.quantity).toString();
+      
+      const leftPart = `${qty.padEnd(8)}${rate.padEnd(8)}`;
+      lines.push(formatLeftRight(leftPart, totalVal, width));
+    });
+    
+    lines.push('-'.repeat(width));
+    
+    lines.push(`Total Items: ${order.items.length}`);
+    lines.push(`Total Quantity: ${order.items.reduce((acc, it) => acc + it.quantity, 0)}`);
+    
+    lines.push('-'.repeat(width));
+    lines.push(formatLeftRight('Sub Total', `${order.subtotal}`, width));
+    
+    if (currentSettings.gstEnabled) {
+      const netAmount = Math.max(0, order.subtotal - order.discount);
+      const cgstAmt = Math.round(netAmount * (currentSettings.cgstRate / 100));
+      const sgstAmt = Math.round(netAmount * (currentSettings.sgstRate / 100));
+      lines.push(formatLeftRight('CGST', `${currentSettings.cgstRate}%: ₹${cgstAmt}`, width));
+      lines.push(formatLeftRight('SGST', `${currentSettings.sgstRate}%: ₹${sgstAmt}`, width));
+    }
+    
+    if (order.discount > 0) {
+      lines.push(formatLeftRight('Discount', `-₹${order.discount}`, width));
+    }
+    
+    if (order.deliveryFee > 0) {
+      lines.push(formatLeftRight('Delivery Fee', `+₹${order.deliveryFee}`, width));
+    }
+    
+    lines.push('-'.repeat(width));
+    lines.push(formatLeftRight('Total', `₹${order.total}`, width));
+    lines.push('-'.repeat(width));
+    
+    lines.push('Mode of Payment');
+    lines.push(order.paymentMethod === 'cod' ? 'cash' : 'upi');
+    lines.push('Received');
+    lines.push(`${order.total}`);
+    
+    lines.push('-'.repeat(width));
+    lines.push(centerText('Thank You! Visit Again!', width));
+    lines.push(centerText('Powered by AARAV WORLD POS', width));
+    lines.push(centerText(`QR CODE Scan To Pay Rs. ${order.total} /-`, width));
+    
+    return lines.join('\n');
+  };
+
   // --- KOT and Bill Thermal Print triggers ---
   const handleBrowserPrint = async () => {
     if (!printingOrder) return;
@@ -260,7 +416,6 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     const bluetooth = (navigator as any).bluetooth;
     if (bluetooth) {
       try {
-        // Request a Bluetooth device with printer service UUID
         const device = await bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb']
@@ -268,7 +423,6 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
         const server = await device.gatt!.connect();
 
-        // Try known serial port / printer service UUIDs
         let characteristic: any = null;
         const serviceUuids = ['000018f0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb'];
         for (const uuid of serviceUuids) {
@@ -288,73 +442,12 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
         if (!characteristic) throw new Error('No writable characteristic found on printer');
 
         // Build ESC/POS byte sequence
-        const lines: string[] = [];
-        lines.push('\x1B\x40'); // Initialize printer (ESC @)
-        lines.push('\x1B\x61\x01'); // Center align
-        lines.push('\x1B\x21\x30'); // Double height + width
-        lines.push('CURRY DELIGHT\n');
-        lines.push('\x1B\x21\x00'); // Normal size
-        if (printType === 'bill') {
-          lines.push('\x1B\x21\x08'); // Emphasized
-          lines.push('TAX INVOICE\n');
-          lines.push('\x1B\x21\x00'); // Normal size
-        }
-        lines.push('Station Road, Kahalgaon\n');
-        lines.push('Ph: +91 7061591831\n');
-        lines.push('--------------------------------\n');
-        lines.push('\x1B\x61\x00'); // Left align
-        lines.push(`Order: ${printingOrder.id}\n`);
-        lines.push(`Type : ${printingOrder.deliveryType.toUpperCase()}\n`);
-        lines.push(`Cust : ${printingOrder.customerName}\n`);
-        lines.push(`Ph   : ${printingOrder.customerPhone}\n`);
-        if (printingOrder.deliveryType === 'delivery') {
-          lines.push(`Addr : ${printingOrder.customerAddress.substring(0, 32)}\n`);
-        }
-        lines.push('--------------------------------\n');
+        const textContent = printType === 'kot'
+          ? generateKOTText(printingOrder)
+          : generateBillText(printingOrder, settings);
 
-        printingOrder.items.forEach((it) => {
-          lines.push(`${it.menuItem.name.substring(0, 20).padEnd(20)} x${it.quantity}`);
-          if (printType === 'bill') {
-            lines.push(`  Rs.${(it.menuItem.price * it.quantity).toString().padStart(6)}\n`);
-          } else {
-            lines.push('\n');
-          }
-          if (it.selectedSpice) lines.push(`  Spice: ${it.selectedSpice}\n`);
-          if (it.specialInstructions) lines.push(`  Note: ${it.specialInstructions}\n`);
-        });
-
-        lines.push('--------------------------------\n');
-
-        if (printType === 'bill') {
-          lines.push(`Subtotal :  Rs.${printingOrder.subtotal}\n`);
-          if (printingOrder.discount > 0) lines.push(`Discount : -Rs.${printingOrder.discount}\n`);
-          if (printingOrder.deliveryFee > 0) lines.push(`Delivery : +Rs.${printingOrder.deliveryFee}\n`);
-          if (settings.gstEnabled) {
-            if (settings.gstin) lines.push(`GSTIN: ${settings.gstin}\n`);
-            lines.push(`CGST (${settings.cgstRate}%) :  Rs.${Math.round(printingOrder.subtotal * (settings.cgstRate / 100))}\n`);
-            lines.push(`SGST (${settings.sgstRate}%) :  Rs.${Math.round(printingOrder.subtotal * (settings.sgstRate / 100))}\n`);
-          }
-          lines.push('================================\n');
-          lines.push('\x1B\x21\x10'); // Bold
-          lines.push(`TOTAL    :  Rs.${printingOrder.total}\n`);
-          lines.push('\x1B\x21\x00'); // Normal
-          lines.push(`Pay Via  : ${printingOrder.paymentMethod.toUpperCase()}\n`);
-        } else {
-          lines.push('   ** KITCHEN COPY (KOT) **\n');
-          lines.push('   No pricing on this slip\n');
-        }
-
-        lines.push('\x1B\x61\x01'); // Center
-        lines.push('\nThank you for dining! \n');
-        lines.push('Cooked with authentic love\n');
-        if (printType === 'bill') {
-           lines.push('\nA DELIGHT IN EVERY BITE\n');
-        }
-        lines.push('\x1B\x64\x05'); // Feed 5 lines
-        lines.push('\x1D\x56\x41'); // Full cut
-
+        const raw = '\x1B\x40\x1B\x21\x00' + textContent + '\n\n\n\n\x1D\x56\x41';
         const encoder = new TextEncoder();
-        const raw = lines.join('');
         const bytes = encoder.encode(raw);
 
         // Send in chunks of 20 bytes (BLE MTU limit)
@@ -2950,96 +3043,24 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
             </div>
 
             {/* --- ACTUAL PRINTABLE EZO 58mm AREA (Class "print-receipt-container" for print media target) --- */}
-            <div 
-              className="bg-cream/10 border-2 border-charcoal/25 p-4 mx-auto rounded font-mono text-[11px] text-black leading-tight w-[220px] shadow-inner select-all"
+            <pre 
+              className="bg-cream/10 border-2 border-charcoal/25 p-4 mx-auto rounded font-mono text-[11px] text-black leading-tight w-[260px] shadow-inner select-all whitespace-pre text-left"
               id="printable-thermal-receipt"
-              style={{ fontFamily: 'monospace' }}
+              style={{ fontFamily: 'monospace', width: '260px' }}
             >
-              <div className="text-center space-y-1">
-                <p className="font-extrabold text-sm uppercase">CURRY DELIGHT</p>
-                {printType === 'bill' && <p className="text-[10px] font-bold tracking-wider text-black">TAX INVOICE</p>}
-                <p className="text-[9px]">Station Road, Kahalgaon</p>
-                <p className="text-[9px]">PH: +91 7061591831</p>
-                <p className="text-[9px]">------------------------</p>
+              {printType === 'kot' ? generateKOTText(printingOrder) : generateBillText(printingOrder, settings)}
+            </pre>
+
+            {printType === 'bill' && (
+              <div className="flex flex-col items-center pt-3 border-t border-dashed border-charcoal/10 bg-cream/10 p-4 mx-auto rounded border-2 border-charcoal/25 w-[260px] border-t-0 -mt-6">
+                <span className="text-[9px] font-bold text-charcoal/50 uppercase tracking-widest font-mono mb-1.5">Scan To Pay (UPI QR)</span>
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=7061591831@ybl&pn=CurryDelight&am=${printingOrder.total}&cu=INR`)}`} 
+                  alt="UPI QR Code" 
+                  className="w-24 h-24 border border-charcoal/10 p-1.5 rounded-lg bg-white shadow-xs"
+                />
               </div>
-
-              {/* Receipt Header details */}
-              <div className="space-y-1 py-1.5 border-b border-dashed border-black/30">
-                <p>Order: {printingOrder.id}</p>
-                <p>Date: {new Date(printingOrder.createdAt).toLocaleDateString()}</p>
-                <p>Time: {new Date(printingOrder.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                <p>Type: {printingOrder.deliveryType.toUpperCase()}</p>
-                <p className="font-bold">Cust: {printingOrder.customerName}</p>
-                <p>Ph: {printingOrder.customerPhone}</p>
-                {printingOrder.deliveryType === 'delivery' && (
-                  <p className="text-[9px] leading-tight">Add: {printingOrder.customerAddress}</p>
-                )}
-              </div>
-
-              {/* Items Table details */}
-              <div className="py-2 space-y-1.5 border-b border-dashed border-black/30">
-                <div className="flex justify-between font-extrabold text-[10px]">
-                  <span>ITEM [QTY]</span>
-                  {printType === 'bill' && <span>PRICE</span>}
-                </div>
-                <p className="text-[9px]">------------------------</p>
-                
-                {printingOrder.items.map((it, idx) => (
-                  <div key={idx} className="space-y-0.5">
-                    <div className="flex justify-between text-[10px] font-bold">
-                      <span>{it.menuItem.name.substring(0, 15)} x{it.quantity}</span>
-                      {printType === 'bill' && <span>₹{it.menuItem.price * it.quantity}</span>}
-                    </div>
-                    {/* Notes & Swaps */}
-                    {it.selectedSpice && <p className="text-[9px] text-black/70"> *Spice: {it.selectedSpice.toUpperCase()}</p>}
-                    {it.specialInstructions && <p className="text-[9px] text-black/70 italic"> *Note: {it.specialInstructions}</p>}
-                    {it.thaliCustomizations && (
-                      <div className="text-[9px] text-black/70 pl-2">
-                        {it.thaliCustomizations.currySwap && <p>*Curry: {it.thaliCustomizations.currySwap}</p>}
-                        {it.thaliCustomizations.breadSwap && <p>*Bread: {it.thaliCustomizations.breadSwap}</p>}
-                        {it.thaliCustomizations.dessertChoice && <p>*Sweet: {it.thaliCustomizations.dessertChoice}</p>}
-                        {it.thaliCustomizations.extraRice && <p>*Add: Extra Rice portion</p>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Bottom total calculations for "Bill" only. KOT NEVER SEES MONEY */}
-              {printType === 'bill' ? (
-                <div className="pt-2 text-[10px] space-y-1 text-right">
-                  <p>Subtotal: ₹{printingOrder.subtotal}</p>
-                  {printingOrder.discount > 0 && <p>Discount: -₹{printingOrder.discount}</p>}
-                  {printingOrder.deliveryFee > 0 && <p>Delivery: +₹{printingOrder.deliveryFee}</p>}
-                  
-                  {/* GST computation breakdown */}
-                  {settings.gstEnabled && (
-                    <>
-                      {settings.gstin && <p className="text-[8px] font-mono block">GSTIN: {settings.gstin}</p>}
-                      <p>CGST ({settings.cgstRate}%): ₹{Math.round(printingOrder.subtotal * (settings.cgstRate / 100))}</p>
-                      <p>SGST ({settings.sgstRate}%): ₹{Math.round(printingOrder.subtotal * (settings.sgstRate / 100))}</p>
-                    </>
-                  )}
-                  <p className="text-[9px]">------------------------</p>
-                  <p className="font-extrabold text-xs">GRAND TOTAL: ₹{printingOrder.total}</p>
-                  <p className="font-bold text-[9px] uppercase">{printingOrder.paymentMethod === 'cod' ? 'CASH ON DELIVERY' : 'PAID VIA UPI'}</p>
-                </div>
-              ) : (
-                <div className="pt-1.5 text-center text-[9px]">
-                  <p className="font-extrabold uppercase bg-black/5 p-1 rounded">KITCHEN COPY (KOT)</p>
-                  <p>No pricing details printed</p>
-                </div>
-              )}
-
-              {/* Footer thank you message */}
-              <div className="text-center pt-3 text-[8px] space-y-0.5">
-                <p>Thank you for dining! 🌸</p>
-                <p>Cooked with authentic love</p>
-                {printType === 'bill' && <p className="font-bold tracking-widest text-[9px] mt-1.5 uppercase">A DELIGHT IN EVERY BITE</p>}
-                <p className="text-[7px] text-black/40 mt-2 font-mono tracking-widest uppercase">Powered by AARAV WORLD POS</p>
-              </div>
-
-            </div>
+            )}
 
             {/* Print Action Buttons */}
             <div className="space-y-2">
