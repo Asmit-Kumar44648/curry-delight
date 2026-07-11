@@ -322,22 +322,31 @@ export const adminStore = {
   },
 
   async updateOrderStatus(orderId: string, status: AdminOrder['status']) {
+    // Optimistic local update
+    const previousOrders = [..._orders];
+    _orders = _orders.map(o => o.id === orderId ? { ...o, status } : o);
+    dispatchStoreUpdate();
+
     try {
       await firebaseService.updateOrderStatus(orderId, status);
     } catch (e) {
-      console.error("Firebase updateOrderStatus failed:", e);
-      // Optimistic local update
-      _orders = _orders.map(o => o.id === orderId ? { ...o, status } : o);
+      console.error("Firebase updateOrderStatus failed, reverting:", e);
+      _orders = previousOrders;
       dispatchStoreUpdate();
     }
   },
 
   async assignDeliveryBoy(orderId: string, deliveryBoyId: string) {
+    // Optimistic local update
+    const previousOrders = [..._orders];
+    _orders = _orders.map(o => o.id === orderId ? { ...o, assignedDeliveryBoyId: deliveryBoyId } : o);
+    dispatchStoreUpdate();
+
     try {
       await firebaseService.assignDeliveryBoy(orderId, deliveryBoyId);
     } catch (e) {
-      console.error("Firebase assignDeliveryBoy failed:", e);
-      _orders = _orders.map(o => o.id === orderId ? { ...o, assignedDeliveryBoyId: deliveryBoyId } : o);
+      console.error("Firebase assignDeliveryBoy failed, reverting:", e);
+      _orders = previousOrders;
       dispatchStoreUpdate();
     }
   },
@@ -365,11 +374,16 @@ export const adminStore = {
   },
 
   async updateReservationStatus(id: string, status: AdminReservation['status']) {
+    // Optimistic local update
+    const previousReservations = [..._reservations];
+    _reservations = _reservations.map(r => r.id === id ? { ...r, status } : r);
+    dispatchStoreUpdate();
+
     try {
       await firebaseService.updateReservationStatus(id, status);
     } catch (e) {
-      console.error("Firebase updateReservationStatus failed:", e);
-      _reservations = _reservations.map(r => r.id === id ? { ...r, status } : r);
+      console.error("Firebase updateReservationStatus failed, reverting:", e);
+      _reservations = previousReservations;
       dispatchStoreUpdate();
     }
   },
@@ -397,21 +411,31 @@ export const adminStore = {
   },
 
   async updateCelebrationStatus(id: string, status: AdminCelebrationEnquiry['status']) {
+    // Optimistic local update
+    const previousCelebrations = [..._celebrations];
+    _celebrations = _celebrations.map(c => c.id === id ? { ...c, status } : c);
+    dispatchStoreUpdate();
+
     try {
       await firebaseService.updateCelebrationStatus(id, status);
     } catch (e) {
-      console.error("Firebase updateCelebrationStatus failed:", e);
-      _celebrations = _celebrations.map(c => c.id === id ? { ...c, status } : c);
+      console.error("Firebase updateCelebrationStatus failed, reverting:", e);
+      _celebrations = previousCelebrations;
       dispatchStoreUpdate();
     }
   },
 
   async updateCelebrationNotes(id: string, notes: string) {
+    // Optimistic local update
+    const previousCelebrations = [..._celebrations];
+    _celebrations = _celebrations.map(c => c.id === id ? { ...c, notes } : c);
+    dispatchStoreUpdate();
+
     try {
       await firebaseService.updateCelebrationNotes(id, notes);
     } catch (e) {
-      console.error("Firebase updateCelebrationNotes failed:", e);
-      _celebrations = _celebrations.map(c => c.id === id ? { ...c, notes } : c);
+      console.error("Firebase updateCelebrationNotes failed, reverting:", e);
+      _celebrations = previousCelebrations;
       dispatchStoreUpdate();
     }
   },

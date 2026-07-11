@@ -1433,8 +1433,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                                 <td className="py-4 px-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                   <select
                                     value={order.status}
-                                    onChange={(e) => {
-                                      adminStore.updateOrderStatus(order.id, e.target.value as any);
+                                    onChange={async (e) => {
+                                      await adminStore.updateOrderStatus(order.id, e.target.value as any);
                                       syncAllData();
                                     }}
                                     className={`bg-white text-[10px] font-bold px-2 py-1 rounded-lg border focus:outline-none cursor-pointer ${
@@ -2385,8 +2385,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                         {res.status === 'pending' ? (
                           <>
                             <button
-                              onClick={() => {
-                                adminStore.updateReservationStatus(res.id, 'accepted');
+                              onClick={async () => {
+                                await adminStore.updateReservationStatus(res.id, 'accepted');
                                 syncAllData();
                               }}
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer"
@@ -2394,8 +2394,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                               Accept Seat
                             </button>
                             <button
-                              onClick={() => {
-                                adminStore.updateReservationStatus(res.id, 'declined');
+                              onClick={async () => {
+                                await adminStore.updateReservationStatus(res.id, 'declined');
                                 syncAllData();
                               }}
                               className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer border border-red-100"
@@ -2487,8 +2487,8 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
 
                       <select
                         value={enq.status}
-                        onChange={(e) => {
-                          adminStore.updateCelebrationStatus(enq.id, e.target.value as any);
+                        onChange={async (e) => {
+                          await adminStore.updateCelebrationStatus(enq.id, e.target.value as any);
                           syncAllData();
                         }}
                         className="bg-cream/40 text-charcoal text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-charcoal/10 focus:outline-none"
@@ -2521,12 +2521,12 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
                     <div className="space-y-2 pt-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/40 font-mono block">Enquiry Sales Notes (CRM)</span>
                       <textarea
-                        value={enq.notes || ''}
-                        onChange={(e) => {
-                          adminStore.updateCelebrationNotes(enq.id, e.target.value);
+                        defaultValue={enq.notes || ''}
+                        onBlur={async (e) => {
+                          await adminStore.updateCelebrationNotes(enq.id, e.target.value);
                           syncAllData();
                         }}
-                        placeholder="Write down details from phone calls, pricing proposals shared, or decoration requirements... Notes are saved instantly!"
+                        placeholder="Write down details from phone calls, pricing proposals shared, or decoration requirements... Notes are saved instantly on click away!"
                         className="w-full bg-cream/20 text-xs p-3 rounded-xl border border-charcoal/10 focus:outline-none h-20 leading-relaxed font-normal"
                       />
                     </div>
