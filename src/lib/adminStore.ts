@@ -1,6 +1,8 @@
 import { CartItem, MenuItem } from '../types';
 import { MENU_ITEMS } from '../data';
 import { firebaseService } from './firebaseService';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // ─── Type Exports ──────────────────────────────────────────────────────────
 
@@ -464,45 +466,67 @@ export const adminStore = {
         await firebaseService.updateSettings(DEFAULT_SETTINGS);
       }
 
-      // 3. Delivery boys: no fake seeding — owner must add real staff manually
+      // 3. Set up dynamic authentication-driven subscriptions
+      const authUnsub = onAuthStateChanged(auth, (user) => {
+        // Clean up previous subscriptions
+        _unsubscribers.forEach(unsub => {
+          try { unsub(); } catch (e) {}
+        });
+        _unsubscribers = [];
 
-      // 4. Set up real-time subscriptions
-      const unsub1 = firebaseService.subscribeToMenuItems((items) => {
-        _menuItems = items;
-        dispatchStoreUpdate();
-      });
+        // Always subscribe to public collections
+        const unsubMenu = firebaseService.subscribeToMenuItems((items) => {
+          _menuItems = items;
+          dispatchStoreUpdate();
+        });
+        const unsubSettings = firebaseService.subscribeToSettings((settings) => {
+          _settings = settings || { ...DEFAULT_SETTINGS };
+          dispatchStoreUpdate();
+        });
+        _unsubscribers.push(unsubMenu, unsubSettings);
 
-      const unsub2 = firebaseService.subscribeToOrders((orders) => {
-        // Detect new orders for sound alert
-        if (_prevOrderCount >= 0 && orders.length > _prevOrderCount) {
-          playNewOrderSound();
+        if (user) {
+          console.log("Store: Admin authenticated. Subscribing to secure collections...");
+          
+          const unsubOrders = firebaseService.subscribeToOrders((orders) => {
+            if (_prevOrderCount >= 0 && orders.length > _prevOrderCount) {
+              playNewOrderSound();
+            }
+            _prevOrderCount = orders.length;
+            _orders = orders;
+            dispatchStoreUpdate();
+          });
+
+          const unsubReservations = firebaseService.subscribeToReservations((res) => {
+            _reservations = res;
+            dispatchStoreUpdate();
+          });
+
+          const unsubCelebrations = firebaseService.subscribeToCelebrations((enquiries) => {
+            _celebrations = enquiries;
+            dispatchStoreUpdate();
+          });
+
+          const unsubDeliveryBoys = firebaseService.subscribeToDeliveryBoys((boys) => {
+            _deliveryBoys = boys;
+            dispatchStoreUpdate();
+          });
+
+          _unsubscribers.push(unsubOrders, unsubReservations, unsubCelebrations, unsubDeliveryBoys);
+        } else {
+          console.log("Store: No authenticated admin. secure subscriptions skipped.");
+          // Clear cached secure data to avoid stale data remaining on screen
+          _orders = [];
+          _reservations = [];
+          _celebrations = [];
+          _deliveryBoys = [];
+          _prevOrderCount = -1;
+          dispatchStoreUpdate();
         }
-        _prevOrderCount = orders.length;
-        _orders = orders;
-        dispatchStoreUpdate();
       });
 
-      const unsub3 = firebaseService.subscribeToReservations((res) => {
-        _reservations = res;
-        dispatchStoreUpdate();
-      });
-
-      const unsub4 = firebaseService.subscribeToCelebrations((enquiries) => {
-        _celebrations = enquiries;
-        dispatchStoreUpdate();
-      });
-
-      const unsub5 = firebaseService.subscribeToDeliveryBoys((boys) => {
-        _deliveryBoys = boys;
-        dispatchStoreUpdate();
-      });
-
-      const unsub6 = firebaseService.subscribeToSettings((settings) => {
-        _settings = settings || { ...DEFAULT_SETTINGS };
-        dispatchStoreUpdate();
-      });
-
-      _unsubscribers = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6];
+      // Maintain authUnsub handle so destroy() can clean it up
+      _unsubscribers.push(authUnsub);
       _isInitialized = true;
 
     } catch (e) {

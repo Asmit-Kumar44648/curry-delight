@@ -141,8 +141,10 @@ export default function AdminDashboard({ navigateTo }: AdminDashboardProps) {
     };
 
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('adminStoreUpdate', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('adminStoreUpdate', handleStorageChange);
     };
   }, []);
 
