@@ -568,6 +568,24 @@ export default function App() {
   return (
     <div className="min-h-screen bg-cream font-sans text-ink selection:bg-saffron selection:text-white">
       
+      {/* Dynamic Flash Announcement Banner (Weather / Festival / Rush Alert) */}
+      {settings.announcementBanner?.enabled && (
+        <div 
+          className={`py-2 px-4 text-xs font-bold text-center tracking-wide flex items-center justify-center gap-2 shadow-sm ${
+            settings.announcementBanner.type === 'weather'
+              ? 'bg-blue-600 text-white'
+              : settings.announcementBanner.type === 'festival'
+              ? 'bg-amber-600 text-white'
+              : settings.announcementBanner.type === 'rush'
+              ? 'bg-rose-700 text-white'
+              : 'bg-saffron text-white'
+          }`}
+          id="flash-announcement-banner"
+        >
+          <span>{settings.announcementBanner.text}</span>
+        </div>
+      )}
+
       {/* 1. STICKY / PERMANENT NAVIGATION */}
       <nav className="sticky top-0 z-40 bg-charcoal text-text-on-dark shadow-md px-6 py-4 md:py-5 transition-all duration-200">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

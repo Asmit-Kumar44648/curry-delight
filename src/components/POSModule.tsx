@@ -22,10 +22,28 @@ import {
   Phone,
   ArrowLeft,
   Flame,
-  Check
+  Check,
+  Users,
+  DollarSign,
+  TrendingUp,
+  Download,
+  Send,
+  Calendar,
+  Sparkles,
+  Clock,
+  CreditCard
 } from 'lucide-react';
 import { MenuItem, CartItem } from '../types';
-import { adminStore, AdminOrder, AdminSettings, playBillPrintedSound } from '../lib/adminStore';
+import {
+  adminStore,
+  AdminOrder,
+  AdminSettings,
+  playBillPrintedSound,
+  TableSession,
+  KOTBatch,
+  PettyExpense,
+  CustomerProfile
+} from '../lib/adminStore';
 import { ADMIN_CREDENTIALS, RESTAURANT_INFO } from '../config/adminAuth';
 
 interface POSModuleProps {
@@ -73,22 +91,50 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
   };
 
   // ─── Navigation Tabs ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'pos' | 'menu' | 'orders' | 'settings'>('pos');
+  const [activeTab, setActiveTab] = useState<'tables' | 'pos' | 'reports' | 'expenses' | 'orders' | 'menu' | 'settings'>('tables');
 
   // ─── Data State from adminStore ──────────────────────────────────────────
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => adminStore.getMenuItems());
   const [settings, setSettings] = useState<AdminSettings>(() => adminStore.getSettings());
   const [orders, setOrders] = useState<AdminOrder[]>(() => adminStore.getOrders());
+  const [tables, setTables] = useState<TableSession[]>(() => adminStore.getTableSessions());
+  const [expenses, setExpenses] = useState<PettyExpense[]>(() => adminStore.getPettyExpenses());
 
   useEffect(() => {
     const handleStoreChange = () => {
       setMenuItems([...adminStore.getMenuItems()]);
       setSettings({ ...adminStore.getSettings() });
       setOrders([...adminStore.getOrders()]);
+      setTables([...adminStore.getTableSessions()]);
+      setExpenses([...adminStore.getPettyExpenses()]);
     };
     window.addEventListener('adminStoreUpdate', handleStoreChange);
     return () => window.removeEventListener('adminStoreUpdate', handleStoreChange);
   }, []);
+
+  // ─── Active Dine-In Table Session ─────────────────────────────────────────
+  const [activeTableId, setActiveTableId] = useState<string | null>(null);
+  const [guestCount, setGuestCount] = useState<number>(2);
+
+  // ─── Petty Cash Register State ───────────────────────────────────────────
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [expenseForm, setExpenseForm] = useState<{
+    amount: number;
+    category: PettyExpense['category'];
+    note: string;
+    staffName: string;
+  }>({
+    amount: 100,
+    category: 'dairy',
+    note: '',
+    staffName: 'Manish'
+  });
+
+  // ─── Z-Report Date Filter ─────────────────────────────────────────────────
+  const [reportDate, setReportDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+
+  // ─── Customer Profile Recognition ─────────────────────────────────────────
+  const [recognizedCustomer, setRecognizedCustomer] = useState<CustomerProfile | null>(null);
 
   // ─── POS Ticket State ────────────────────────────────────────────────────
   const [ticketItems, setTicketItems] = useState<CartItem[]>([]);
@@ -338,24 +384,42 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
     return ' '.repeat(pad) + text;
   };
 
-  const generateKotText = (orderId: string): string => {
+  const generateKotText = (
+    orderId: string,
+    items?: CartItem[],
+    kotNumber?: number,
+    isRunning?: boolean,
+    tableName?: string
+  ): string => {
     const now = new Date();
     const dateStr = now.toLocaleDateString('en-IN');
     const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     const divider = '--------------------------------';
-    const lines: string[] = [
-      centerText('*** KITCHEN ORDER TICKET ***'),
-      centerText('(KOT)'),
-      divider,
-      padLine(`Order: ${orderId}`, timeStr),
-      padLine(`Date: ${dateStr}`, `Type: ${orderType.toUpperCase()}`),
-      orderType === 'dine-in' ? `Table: ${tableNumber || 'Walk-In'}` : `Customer: ${customerName || 'Counter'}`,
-      divider,
-      padLine('ITEM [QTY]', 'NOTES'),
-      divider
-    ];
+    const kotItems = items ?? ticketItems;
+    const lines: string[] = [];
 
-    ticketItems.forEach((item, idx) => {
+    if (isRunning && kotNumber) {
+      lines.push(centerText('*** RUNNING KOT ***'));
+      lines.push(centerText(`*** ADDITIONAL ORDER KOT #${kotNumber} ***`));
+    } else {
+      lines.push(centerText('*** KITCHEN ORDER TICKET ***'));
+      lines.push(centerText('(KOT)'));
+    }
+
+    lines.push(divider);
+    if (kotNumber) lines.push(padLine(`KOT #:`, String(kotNumber)));
+    lines.push(padLine(`Order: ${orderId}`, timeStr));
+    lines.push(padLine(`Date: ${dateStr}`, `Type: ${orderType.toUpperCase()}`));
+    lines.push(tableName
+      ? `Table: ${tableName}`
+      : orderType === 'dine-in'
+        ? `Table: ${tableNumber || 'Walk-In'}`
+        : `Customer: ${customerName || 'Counter'}`);
+    lines.push(divider);
+    lines.push(padLine('ITEM [QTY]', 'NOTES'));
+    lines.push(divider);
+
+    kotItems.forEach((item, idx) => {
       const spiceTag = item.selectedSpice === 'hot' ? ' [Spicy]' : item.selectedSpice === 'mild' ? ' [Mild]' : '';
       lines.push(`${idx + 1}. ${item.menuItem.name} x${item.quantity}${spiceTag}`);
       if (item.specialInstructions) {
@@ -364,7 +428,7 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
     });
 
     lines.push(divider);
-    lines.push(centerText(`TOTAL ITEMS: ${ticketItems.reduce((s, i) => s + i.quantity, 0)}`));
+    lines.push(centerText(`TOTAL ITEMS: ${kotItems.reduce((s, i) => s + i.quantity, 0)}`));
     lines.push(divider);
     lines.push('\n\n\n');
     return lines.join('\n');
@@ -523,6 +587,380 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
         rawLines: billText.split('\n'),
         isKot: false
       });
+    }
+  };
+
+  // ─── Customer Phone Change & Profile Lookup ────────────────────────────────
+  const handlePhoneChange = (val: string) => {
+    setCustomerPhone(val);
+    const clean = val.replace(/\D/g, '');
+    if (clean.length === 10) {
+      const found = adminStore.getCustomer(clean);
+      if (found) {
+        setRecognizedCustomer(found);
+        if (!customerName) setCustomerName(found.name);
+        if (!customerAddress && found.address) setCustomerAddress(found.address);
+      } else {
+        setRecognizedCustomer(null);
+      }
+    } else {
+      setRecognizedCustomer(null);
+    }
+  };
+
+  // ─── Table Session Operations ─────────────────────────────────────────────
+  const handleSelectTable = (table: TableSession) => {
+    setActiveTableId(table.tableId);
+    setTableNumber(table.tableName);
+    setOrderType('dine-in');
+    setGuestCount(table.guestCount || 2);
+    setCustomerName(table.customerName || '');
+    setCustomerPhone(table.customerPhone || '');
+    setTicketItems([...table.items]);
+    setActiveTab('pos');
+  };
+
+  const handleFireTableKOT = async () => {
+    if (!activeTableId) {
+      handlePrintKOT();
+      return;
+    }
+
+    const currentTable = adminStore.getTableSession(activeTableId);
+    if (!currentTable) return;
+
+    if (ticketItems.length === 0) {
+      alert('Cannot fire empty KOT. Please add items to table ticket.');
+      return;
+    }
+
+    // Determine newly added items since last KOT
+    const alreadyFiredItems: Record<string, number> = {};
+    currentTable.kots.forEach(k => {
+      k.items.forEach(i => {
+        alreadyFiredItems[i.menuItem.id] = (alreadyFiredItems[i.menuItem.id] || 0) + i.quantity;
+      });
+    });
+
+    const newItemsToFire: CartItem[] = [];
+    ticketItems.forEach(item => {
+      const alreadyFired = alreadyFiredItems[item.menuItem.id] || 0;
+      if (item.quantity > alreadyFired) {
+        newItemsToFire.push({
+          ...item,
+          quantity: item.quantity - alreadyFired
+        });
+      }
+    });
+
+    if (currentTable.kots.length > 0 && newItemsToFire.length === 0) {
+      alert('All items in this ticket have already been sent to the kitchen! Add new dishes to fire running KOT.');
+      return;
+    }
+
+    const itemsForThisKOT = currentTable.kots.length === 0 ? [...ticketItems] : newItemsToFire;
+    const kotNumber = currentTable.kots.length + 1;
+    const isRunning = currentTable.kots.length > 0;
+    const orderId = `KOT-${currentTable.tableId}-${kotNumber}`;
+
+    const kotText = generateKotText(orderId, itemsForThisKOT, kotNumber, isRunning, currentTable.tableName);
+
+    // Update table session in adminStore
+    const updatedTable: TableSession = {
+      ...currentTable,
+      status: 'occupied',
+      openedAt: currentTable.openedAt || new Date().toISOString(),
+      customerName: customerName || currentTable.customerName,
+      customerPhone: customerPhone || currentTable.customerPhone,
+      guestCount,
+      items: [...ticketItems],
+      kots: [
+        ...currentTable.kots,
+        {
+          kotNumber,
+          printedAt: new Date().toISOString(),
+          items: itemsForThisKOT
+        }
+      ]
+    };
+    adminStore.saveTableSession(updatedTable);
+    setTables(adminStore.getTableSessions());
+
+    // Print KOT
+    if (printerCharacteristic) {
+      try {
+        setPrintFeedback(`Printing Running KOT #${kotNumber} for ${currentTable.tableName}...`);
+        await sendBytesToBluetooth(kotText);
+        setPrintFeedback(`KOT #${kotNumber} Printed for ${currentTable.tableName}!`);
+        setTimeout(() => setPrintFeedback(''), 3000);
+      } catch (err) {
+        console.error('Bluetooth print failed:', err);
+        setPreviewContent({
+          title: `RUNNING KOT #${kotNumber} (${currentTable.tableName})`,
+          text: kotText,
+          rawLines: kotText.split('\n'),
+          isKot: true
+        });
+      }
+    } else {
+      setPreviewContent({
+        title: `RUNNING KOT #${kotNumber} (${currentTable.tableName})`,
+        text: kotText,
+        rawLines: kotText.split('\n'),
+        isKot: true
+      });
+    }
+  };
+
+  const handleSettleTableBill = async () => {
+    if (ticketItems.length === 0) {
+      alert('The ticket is empty. Cannot settle bill.');
+      return;
+    }
+
+    // Save final completed order in adminStore
+    const savedOrder = saveOrderToStore('completed');
+    const billText = generateBillText(savedOrder.id);
+    playBillPrintedSound();
+
+    // Record customer order for repeat tracking
+    if (customerPhone) {
+      adminStore.recordCustomerOrder(customerPhone, customerName, total, customerAddress);
+    }
+
+    // Clear table session
+    if (activeTableId) {
+      adminStore.clearTableSession(activeTableId);
+      setTables(adminStore.getTableSessions());
+      setActiveTableId(null);
+    }
+
+    if (printerCharacteristic) {
+      try {
+        setPrintFeedback('Printing Final Bill via Bluetooth...');
+        await sendBytesToBluetooth(billText);
+        setPrintFeedback('Bill Printed successfully!');
+        setTimeout(() => setPrintFeedback(''), 3000);
+        clearTicket();
+      } catch (err) {
+        console.error('Bluetooth bill print failed:', err);
+        setPreviewContent({
+          title: 'FINAL TAX INVOICE',
+          text: billText,
+          rawLines: billText.split('\n'),
+          isKot: false
+        });
+        clearTicket();
+      }
+    } else {
+      setPreviewContent({
+        title: 'FINAL TAX INVOICE',
+        text: billText,
+        rawLines: billText.split('\n'),
+        isKot: false
+      });
+      clearTicket();
+    }
+  };
+
+  const handleVacateTable = (tableId: string) => {
+    if (confirm(`Are you sure you want to reset & vacate ${tableId}? Unbilled items will be discarded.`)) {
+      adminStore.clearTableSession(tableId);
+      setTables(adminStore.getTableSessions());
+      if (activeTableId === tableId) {
+        clearTicket();
+        setActiveTableId(null);
+      }
+    }
+  };
+
+  // ─── Daily Z-Report & Audit Generation ────────────────────────────────────
+  const generateZReportText = (dateStr: string): string => {
+    const divider = '--------------------------------';
+    const doubleDivider = '================================';
+    const targetOrders = orders.filter(o => o.createdAt.startsWith(dateStr));
+    const targetExpenses = expenses.filter(e => e.timestamp.startsWith(dateStr));
+
+    const totalOrdersCount = targetOrders.length;
+    const grossSales = targetOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalDiscounts = targetOrders.reduce((sum, o) => sum + o.discount, 0);
+    const totalGST = targetOrders.reduce((sum, o) => sum + (o.cgst + o.sgst), 0);
+
+    const cashOrders = targetOrders.filter(o => o.paymentMethod === 'cash');
+    const cashTotal = cashOrders.reduce((s, o) => s + o.total, 0);
+
+    const upiOrders = targetOrders.filter(o => o.paymentMethod === 'upi');
+    const upiTotal = upiOrders.reduce((s, o) => s + o.total, 0);
+
+    const codOrders = targetOrders.filter(o => o.paymentMethod === 'cod');
+    const codTotal = codOrders.reduce((s, o) => s + o.total, 0);
+
+    const dineInOrders = targetOrders.filter(o => o.deliveryType === 'dine-in');
+    const deliveryOrders = targetOrders.filter(o => o.deliveryType === 'delivery');
+    const pickupOrders = targetOrders.filter(o => o.deliveryType === 'pickup');
+
+    const totalPettyOut = targetExpenses.reduce((s, e) => s + e.amount, 0);
+    const netCashInDrawer = cashTotal - totalPettyOut;
+
+    // Item sales tally
+    const itemMap: Record<string, { name: string; qty: number; revenue: number }> = {};
+    targetOrders.forEach(o => {
+      o.items.forEach(i => {
+        if (!itemMap[i.menuItem.id]) {
+          itemMap[i.menuItem.id] = { name: i.menuItem.name, qty: 0, revenue: 0 };
+        }
+        itemMap[i.menuItem.id].qty += i.quantity;
+        itemMap[i.menuItem.id].revenue += i.menuItem.price * i.quantity;
+      });
+    });
+    const topItems = Object.values(itemMap)
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 3);
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+    const lines: string[] = [
+      centerText('CURRY DELIGHT KAHALGAON'),
+      centerText('DAILY Z-REPORT / SHIFT AUDIT'),
+      centerText('Shiv Parvati Nagar, Block Rd'),
+      divider,
+      padLine(`Audit Date: ${dateStr}`, timeStr),
+      padLine('Terminal: Counter 1', 'Staff: Manish'),
+      doubleDivider,
+      padLine('TOTAL BILLS ISSUED:', `${totalOrdersCount}`),
+      padLine('GROSS REVENUE:', `INR ${grossSales}`),
+      padLine('Total Discounts Given:', `-INR ${totalDiscounts}`),
+      padLine('Total GST Collected:', `INR ${totalGST}`),
+      divider,
+      centerText('-- PAYMENT BREAKDOWN --'),
+      padLine(`CASH (${cashOrders.length} bills):`, `INR ${cashTotal}`),
+      padLine(`UPI / QR (${upiOrders.length} bills):`, `INR ${upiTotal}`),
+      padLine(`COD / Due (${codOrders.length} bills):`, `INR ${codTotal}`),
+      divider,
+      centerText('-- PETTY CASH / OUTFLOWS --'),
+      padLine('Total Cash Expenses:', `-INR ${totalPettyOut}`),
+      doubleDivider,
+      padLine('>> NET CASH IN HAND <<', `INR ${netCashInDrawer}`),
+      doubleDivider,
+      centerText('-- CHANNEL SUMMARY --'),
+      padLine(`Dine-In (${dineInOrders.length}):`, `INR ${dineInOrders.reduce((s, o) => s + o.total, 0)}`),
+      padLine(`Delivery (${deliveryOrders.length}):`, `INR ${deliveryOrders.reduce((s, o) => s + o.total, 0)}`),
+      padLine(`Takeaway (${pickupOrders.length}):`, `INR ${pickupOrders.reduce((s, o) => s + o.total, 0)}`),
+      divider,
+      centerText('-- TOP 3 BESTSELLERS --')
+    ];
+
+    topItems.forEach((t, idx) => {
+      lines.push(padLine(`${idx + 1}. ${t.name.substring(0, 18)}`, `x${t.qty} (INR ${t.revenue})`));
+    });
+
+    lines.push(divider);
+    lines.push(centerText('AUDITED & VERIFIED BY:'));
+    lines.push('\n\n');
+    lines.push(centerText('________________________'));
+    lines.push(centerText('Manager / Owner Signature'));
+    lines.push('\n\n\n');
+
+    return lines.join('\n');
+  };
+
+  const handlePrintZReport = async (dateStr: string) => {
+    const reportText = generateZReportText(dateStr);
+    if (printerCharacteristic) {
+      try {
+        setPrintFeedback('Printing Z-Report on thermal printer...');
+        await sendBytesToBluetooth(reportText);
+        setPrintFeedback('Z-Report Printed successfully!');
+        setTimeout(() => setPrintFeedback(''), 3000);
+      } catch (err) {
+        console.error('Bluetooth print error:', err);
+        setPreviewContent({
+          title: `DAILY Z-REPORT (${dateStr})`,
+          text: reportText,
+          rawLines: reportText.split('\n'),
+          isKot: false
+        });
+      }
+    } else {
+      setPreviewContent({
+        title: `DAILY Z-REPORT (${dateStr})`,
+        text: reportText,
+        rawLines: reportText.split('\n'),
+        isKot: false
+      });
+    }
+  };
+
+  const handleSendWhatsAppZReport = (dateStr: string) => {
+    const targetOrders = orders.filter(o => o.createdAt.startsWith(dateStr));
+    const targetExpenses = expenses.filter(e => e.timestamp.startsWith(dateStr));
+
+    const totalOrdersCount = targetOrders.length;
+    const grossSales = targetOrders.reduce((sum, o) => sum + o.total, 0);
+    const cashTotal = targetOrders.filter(o => o.paymentMethod === 'cash').reduce((s, o) => s + o.total, 0);
+    const upiTotal = targetOrders.filter(o => o.paymentMethod === 'upi').reduce((s, o) => s + o.total, 0);
+    const totalPetty = targetExpenses.reduce((s, e) => s + e.amount, 0);
+    const netCash = cashTotal - totalPetty;
+
+    const message = `*CURRY DELIGHT KAHALGAON - DAY CLOSING REPORT*\n` +
+      `📅 *Date:* ${dateStr}\n` +
+      `----------------------------------------\n` +
+      `🧾 *Total Orders:* ${totalOrdersCount}\n` +
+      `💰 *Gross Sales:* ₹${grossSales}\n` +
+      `----------------------------------------\n` +
+      `💵 *Cash Collected:* ₹${cashTotal}\n` +
+      `📲 *UPI / QR Received:* ₹${upiTotal}\n` +
+      `📉 *Petty Cash Outflows:* -₹${totalPetty}\n` +
+      `----------------------------------------\n` +
+      `*👉 NET CASH IN DRAWER:* *₹${netCash}*\n` +
+      `----------------------------------------\n` +
+      `📍 *Channels:* Dine-in (${targetOrders.filter(o => o.deliveryType === 'dine-in').length}) | Delivery (${targetOrders.filter(o => o.deliveryType === 'delivery').length}) | Takeaway (${targetOrders.filter(o => o.deliveryType === 'pickup').length})\n` +
+      `Shift closed cleanly on Terminal 1.`;
+
+    const encoded = encodeURIComponent(message);
+    window.open(`https://wa.me/917061591831?text=${encoded}`, '_blank');
+  };
+
+  const handleExportCSV = (dateStr: string) => {
+    const csvContent = adminStore.exportOrdersCSV(dateStr);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `curry_delight_orders_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ─── Petty Cash Actions ───────────────────────────────────────────────────
+  const handleAddExpense = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expenseForm.amount || expenseForm.amount <= 0) {
+      alert('Please enter a valid expense amount.');
+      return;
+    }
+    adminStore.addPettyExpense({
+      amount: Number(expenseForm.amount),
+      category: expenseForm.category,
+      note: expenseForm.note || `${expenseForm.category} daily purchase`,
+      staffName: expenseForm.staffName || 'Manish'
+    });
+    setExpenses(adminStore.getPettyExpenses());
+    setIsAddExpenseOpen(false);
+    setExpenseForm({
+      amount: 100,
+      category: 'dairy',
+      note: '',
+      staffName: 'Manish'
+    });
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    if (confirm('Delete this expense entry?')) {
+      adminStore.deletePettyExpense(id);
+      setExpenses(adminStore.getPettyExpenses());
     }
   };
 
@@ -704,19 +1142,54 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="flex items-center space-x-1 bg-white/10 p-1 rounded-xl">
+          <nav className="flex items-center space-x-1 bg-white/10 p-1 rounded-xl overflow-x-auto max-w-full">
             <button
-              onClick={() => setActiveTab('pos')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] ${
+              onClick={() => setActiveTab('tables')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
+                activeTab === 'tables' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Tables (Dine-In)</span>
+              <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full font-mono">
+                {tables.filter(t => t.status === 'occupied').length}/10
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTableId(null);
+                setTableNumber('');
+                setOrderType('dine-in');
+                setActiveTab('pos');
+              }}
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
                 activeTab === 'pos' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>Counter POS</span>
+              <span>Quick POS</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
+                activeTab === 'reports' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span>Z-Report</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
+                activeTab === 'expenses' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Petty Cash</span>
             </button>
             <button
               onClick={() => setActiveTab('orders')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
                 activeTab === 'orders' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
               }`}
             >
@@ -725,16 +1198,16 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
             </button>
             <button
               onClick={() => setActiveTab('menu')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
                 activeTab === 'menu' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
               }`}
             >
               <Utensils className="w-4 h-4" />
-              <span>Menu Editor</span>
+              <span>Menu</span>
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0 ${
                 activeTab === 'settings' ? 'bg-saffron text-white shadow-sm' : 'text-white/70 hover:text-white'
               }`}
             >
@@ -795,6 +1268,419 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
 
       {/* 2. MAIN BODY */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+        {/* ================================================================= */}
+        {/* TAB: TABLES (DINE-IN)                                             */}
+        {/* ================================================================= */}
+        {activeTab === 'tables' && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-5 rounded-3xl border border-charcoal/10 shadow-xs">
+              <div>
+                <span className="text-[10px] font-bold text-saffron uppercase tracking-widest font-mono">Dine-In Management</span>
+                <h2 className="font-display font-bold text-2xl text-charcoal">Table Grid — Kahalgaon Hall</h2>
+                <p className="text-xs text-charcoal/60 mt-0.5">
+                  {tables.filter(t => t.status === 'occupied').length} of 10 tables occupied · Open a table to start a running KOT
+                </p>
+              </div>
+              <div className="flex items-center space-x-3 text-xs font-semibold">
+                <span className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  <span>Vacant</span>
+                </span>
+                <span className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                  <span>Occupied</span>
+                </span>
+                <span className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                  <span>Billed</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {tables.map(table => {
+                const isOccupied = table.status === 'occupied';
+                const isBilled = table.status === 'billed';
+                const isVacant = table.status === 'vacant';
+                const itemCount = table.items.reduce((s, i) => s + i.quantity, 0);
+                const tableTotal = table.items.reduce((s, i) => s + i.menuItem.price * i.quantity, 0);
+                const openedMins = table.openedAt
+                  ? Math.floor((Date.now() - new Date(table.openedAt).getTime()) / 60000)
+                  : 0;
+                return (
+                  <div
+                    key={table.tableId}
+                    className={`rounded-2xl border-2 p-4 space-y-3 transition-all duration-150 ${
+                      isOccupied
+                        ? 'border-amber-400 bg-amber-50'
+                        : isBilled
+                        ? 'border-red-400 bg-red-50'
+                        : 'border-charcoal/10 bg-white hover:border-saffron/40'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-display font-bold text-xl text-charcoal">{table.tableName}</div>
+                        <div className={`text-[10px] font-bold uppercase tracking-widest font-mono mt-0.5 ${
+                          isOccupied ? 'text-amber-600' : isBilled ? 'text-red-600' : 'text-emerald-600'
+                        }`}>
+                          {isOccupied ? '● Occupied' : isBilled ? '● Billed' : '● Vacant'}
+                        </div>
+                      </div>
+                      {isOccupied && (
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-charcoal font-mono">₹{tableTotal}</div>
+                          <div className="text-[10px] text-charcoal/50">{openedMins}m ago</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {isOccupied && (
+                      <div className="text-[10px] text-charcoal/70 space-y-0.5">
+                        {table.customerName && <div>👤 {table.customerName}</div>}
+                        <div>🍽 {itemCount} items · {table.kots.length} KOT{table.kots.length !== 1 ? 's' : ''} fired</div>
+                        {table.guestCount > 0 && <div>👥 {table.guestCount} guests</div>}
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      {isVacant ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectTable(table)}
+                          className="w-full bg-saffron hover:bg-[#d15423] text-white font-bold text-[11px] uppercase tracking-wider py-2 rounded-xl cursor-pointer transition-colors min-h-[36px]"
+                        >
+                          Open & Order
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectTable(table)}
+                            className="w-full bg-charcoal hover:bg-charcoal/90 text-white font-bold text-[11px] uppercase tracking-wider py-2 rounded-xl cursor-pointer transition-colors min-h-[36px]"
+                          >
+                            Continue Order →
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleVacateTable(table.tableId)}
+                            className="w-full border border-red-300 text-red-600 hover:bg-red-50 font-bold text-[11px] uppercase tracking-wider py-2 rounded-xl cursor-pointer transition-colors min-h-[36px]"
+                          >
+                            Vacate & Reset
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB: Z-REPORT / DAILY AUDIT                                        */}
+        {/* ================================================================= */}
+        {activeTab === 'reports' && (() => {
+          const reportOrders = orders.filter(o => o.createdAt.startsWith(reportDate));
+          const reportExpenses = expenses.filter(e => e.timestamp.startsWith(reportDate));
+          const grossSales = reportOrders.reduce((s, o) => s + o.total, 0);
+          const cashTotal = reportOrders.filter(o => o.paymentMethod === 'cash').reduce((s, o) => s + o.total, 0);
+          const upiTotal = reportOrders.filter(o => o.paymentMethod === 'upi').reduce((s, o) => s + o.total, 0);
+          const totalPetty = reportExpenses.reduce((s, e) => s + e.amount, 0);
+          const netCash = cashTotal - totalPetty;
+
+          const itemMap: Record<string, { name: string; qty: number }> = {};
+          reportOrders.forEach(o => o.items.forEach(i => {
+            if (!itemMap[i.menuItem.id]) itemMap[i.menuItem.id] = { name: i.menuItem.name, qty: 0 };
+            itemMap[i.menuItem.id].qty += i.quantity;
+          }));
+          const topItems = Object.values(itemMap).sort((a, b) => b.qty - a.qty).slice(0, 3);
+
+          return (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-charcoal/10 shadow-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-saffron uppercase tracking-widest font-mono">End-of-Day Audit</span>
+                  <h2 className="font-display font-bold text-2xl text-charcoal">Daily Z-Report</h2>
+                  <p className="text-xs text-charcoal/60 mt-0.5">Print, WhatsApp, or download CSV for any day</p>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="date"
+                    value={reportDate}
+                    onChange={(e) => setReportDate(e.target.value)}
+                    className="border border-charcoal/20 rounded-xl px-3 py-2 text-xs font-semibold text-charcoal focus:outline-none focus:ring-1 focus:ring-saffron min-h-[44px]"
+                  />
+                </div>
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {[
+                  { label: 'Total Bills', value: String(reportOrders.length), icon: '🧾', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+                  { label: 'Gross Sales', value: `₹${grossSales}`, icon: '💰', color: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+                  { label: 'Cash Collected', value: `₹${cashTotal}`, icon: '💵', color: 'bg-green-50 border-green-200 text-green-800' },
+                  { label: 'UPI / QR', value: `₹${upiTotal}`, icon: '📲', color: 'bg-purple-50 border-purple-200 text-purple-800' },
+                  { label: 'Petty Cash Out', value: `-₹${totalPetty}`, icon: '📉', color: 'bg-red-50 border-red-200 text-red-700' },
+                  { label: 'Net Cash in Drawer', value: `₹${netCash}`, icon: '🏦', color: 'bg-saffron/10 border-saffron/30 text-charcoal font-bold' },
+                ].map(stat => (
+                  <div key={stat.label} className={`p-4 rounded-2xl border ${stat.color} space-y-1`}>
+                    <div className="text-lg">{stat.icon}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider font-mono opacity-70">{stat.label}</div>
+                    <div className="text-base font-bold font-mono">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Channel Breakdown */}
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: 'Dine-In', count: reportOrders.filter(o => o.deliveryType === 'dine-in').length, total: reportOrders.filter(o => o.deliveryType === 'dine-in').reduce((s, o) => s + o.total, 0), icon: '🍽' },
+                  { label: 'Delivery', count: reportOrders.filter(o => o.deliveryType === 'delivery').length, total: reportOrders.filter(o => o.deliveryType === 'delivery').reduce((s, o) => s + o.total, 0), icon: '🛵' },
+                  { label: 'Takeaway', count: reportOrders.filter(o => o.deliveryType === 'pickup').length, total: reportOrders.filter(o => o.deliveryType === 'pickup').reduce((s, o) => s + o.total, 0), icon: '🥡' },
+                ].map(ch => (
+                  <div key={ch.label} className="bg-white p-4 rounded-2xl border border-charcoal/10 text-center space-y-1">
+                    <div className="text-2xl">{ch.icon}</div>
+                    <div className="font-bold text-charcoal text-sm">{ch.label}</div>
+                    <div className="font-mono text-xs text-charcoal/60">{ch.count} orders · ₹{ch.total}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top Sellers */}
+              {topItems.length > 0 && (
+                <div className="bg-white p-5 rounded-3xl border border-charcoal/10">
+                  <h3 className="font-display font-bold text-base text-charcoal mb-3">⭐ Top {topItems.length} Bestsellers Today</h3>
+                  <div className="space-y-2">
+                    {topItems.map((item, i) => (
+                      <div key={item.name} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-6 h-6 rounded-full bg-saffron/10 text-saffron font-bold text-xs flex items-center justify-center font-mono">{i + 1}</span>
+                          <span className="font-semibold text-charcoal">{item.name}</span>
+                        </div>
+                        <span className="font-mono text-xs text-charcoal/60">{item.qty} sold</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handlePrintZReport(reportDate)}
+                  className="bg-charcoal text-white font-bold text-xs uppercase tracking-wider py-4 px-5 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer hover:bg-charcoal/90 shadow-md min-h-[52px]"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Z-Report (58mm)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsAppZReport(reportDate)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider py-4 px-5 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-md min-h-[52px]"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>WhatsApp to Owner</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportCSV(reportDate)}
+                  className="border border-charcoal/20 text-charcoal font-bold text-xs uppercase tracking-wider py-4 px-5 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer hover:bg-charcoal/5 min-h-[52px]"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download CSV</span>
+                </button>
+              </div>
+
+              {reportOrders.length === 0 && (
+                <div className="text-center py-12 text-charcoal/40 space-y-2">
+                  <FileText className="w-10 h-10 mx-auto opacity-30" />
+                  <p className="text-sm font-semibold">No orders found for {reportDate}</p>
+                  <p className="text-xs">Switch to Quick POS or Table tab to create orders, then return here.</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ================================================================= */}
+        {/* TAB: PETTY CASH / DAILY EXPENSE TRACKER                            */}
+        {/* ================================================================= */}
+        {activeTab === 'expenses' && (() => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const todayExpenses = expenses.filter(e => e.timestamp.startsWith(todayStr));
+          const totalOut = todayExpenses.reduce((s, e) => s + e.amount, 0);
+          const cashIn = orders.filter(o => o.createdAt.startsWith(todayStr) && o.paymentMethod === 'cash').reduce((s, o) => s + o.total, 0);
+          const netCash = cashIn - totalOut;
+
+          const categoryLabels: Record<PettyExpense['category'], string> = {
+            dairy: '🥛 Dairy / Milk',
+            vegetables: '🥦 Vegetables',
+            gas_fuel: '⛽ Gas / Fuel',
+            maintenance: '🔧 Maintenance',
+            staff: '👤 Staff Advance',
+            other: '📦 Other',
+          };
+
+          return (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-charcoal/10 shadow-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-saffron uppercase tracking-widest font-mono">Cash Flow Control</span>
+                  <h2 className="font-display font-bold text-2xl text-charcoal">Petty Cash Register</h2>
+                  <p className="text-xs text-charcoal/60 mt-0.5">Log daily cash outflows — milk, vegetables, gas, transport & more</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddExpenseOpen(true)}
+                  className="bg-saffron hover:bg-[#d15423] text-white font-bold text-xs uppercase tracking-wider px-5 py-3 rounded-full flex items-center space-x-1.5 cursor-pointer shadow-md min-h-[44px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Cash Expense</span>
+                </button>
+              </div>
+
+              {/* Today's Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1 text-center">
+                  <div className="text-lg">💵</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider font-mono text-emerald-700">Cash Collected Today</div>
+                  <div className="text-xl font-bold font-mono text-emerald-800">₹{cashIn}</div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1 text-center">
+                  <div className="text-lg">📉</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider font-mono text-red-700">Total Cash Out</div>
+                  <div className="text-xl font-bold font-mono text-red-800">-₹{totalOut}</div>
+                </div>
+                <div className={`rounded-2xl p-4 space-y-1 text-center border ${netCash >= 0 ? 'bg-saffron/10 border-saffron/30' : 'bg-red-100 border-red-300'}`}>
+                  <div className="text-lg">🏦</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider font-mono text-charcoal/70">Net Cash in Drawer</div>
+                  <div className={`text-xl font-bold font-mono ${netCash >= 0 ? 'text-charcoal' : 'text-red-700'}`}>₹{netCash}</div>
+                </div>
+              </div>
+
+              {/* Expense List */}
+              <div className="bg-white rounded-3xl border border-charcoal/10 overflow-hidden">
+                <div className="p-4 border-b border-charcoal/10 flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-charcoal">Today's Outflows ({todayExpenses.length})</h3>
+                  <span className="text-xs text-charcoal/50 font-mono">{new Date().toLocaleDateString('en-IN')}</span>
+                </div>
+                {todayExpenses.length === 0 ? (
+                  <div className="text-center py-10 text-charcoal/40 space-y-2">
+                    <DollarSign className="w-8 h-8 mx-auto opacity-30" />
+                    <p className="text-sm font-semibold">No expenses logged today</p>
+                    <p className="text-xs">Tap "Add Cash Expense" to record a petty cash outflow.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-charcoal/5">
+                    {todayExpenses.map(exp => (
+                      <div key={exp.id} className="flex items-center justify-between p-4 hover:bg-cream/30 transition-colors">
+                        <div className="space-y-0.5">
+                          <div className="text-sm font-bold text-charcoal">{categoryLabels[exp.category]}</div>
+                          <div className="text-xs text-charcoal/60">{exp.note}</div>
+                          <div className="text-[10px] text-charcoal/40 font-mono">
+                            {new Date(exp.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                            {exp.staffName && ` · by ${exp.staffName}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <span className="font-bold font-mono text-red-600 text-sm">-₹{exp.amount}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExpense(exp.id)}
+                            className="p-1.5 text-charcoal/30 hover:text-red-500 cursor-pointer rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add Expense Modal */}
+              {isAddExpenseOpen && (
+                <div className="fixed inset-0 z-50 bg-charcoal/60 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-charcoal/10 space-y-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-display font-bold text-lg text-charcoal">Log Cash Expense</h3>
+                      <button type="button" onClick={() => setIsAddExpenseOpen(false)} className="p-1 text-charcoal/40 hover:text-charcoal cursor-pointer">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <form onSubmit={handleAddExpense} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 font-mono block">Amount (₹)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          required
+                          value={expenseForm.amount}
+                          onChange={(e) => setExpenseForm(f => ({ ...f, amount: Number(e.target.value) }))}
+                          className="w-full border border-charcoal/20 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-saffron min-h-[44px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 font-mono block">Category</label>
+                        <select
+                          value={expenseForm.category}
+                          onChange={(e) => setExpenseForm(f => ({ ...f, category: e.target.value as PettyExpense['category'] }))}
+                          className="w-full border border-charcoal/20 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-saffron min-h-[44px]"
+                        >
+                          <option value="dairy">🥛 Dairy / Milk</option>
+                          <option value="vegetables">🥦 Vegetables / Produce</option>
+                          <option value="gas_fuel">⛽ Gas / Fuel / Transport</option>
+                          <option value="maintenance">🔧 Maintenance / Repairs</option>
+                          <option value="staff">👤 Staff Advance / Wages</option>
+                          <option value="other">📦 Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 font-mono block">Note / Description</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 2 litres milk from Sharma Dairy"
+                          value={expenseForm.note}
+                          onChange={(e) => setExpenseForm(f => ({ ...f, note: e.target.value }))}
+                          className="w-full border border-charcoal/20 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-saffron min-h-[44px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 font-mono block">Staff Name</label>
+                        <input
+                          type="text"
+                          placeholder="Who logged this?"
+                          value={expenseForm.staffName}
+                          onChange={(e) => setExpenseForm(f => ({ ...f, staffName: e.target.value }))}
+                          className="w-full border border-charcoal/20 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-saffron min-h-[44px]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddExpenseOpen(false)}
+                          className="border border-charcoal/20 text-charcoal font-bold text-xs py-3 rounded-full hover:bg-charcoal/5 cursor-pointer min-h-[44px]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="bg-saffron hover:bg-[#d15423] text-white font-bold text-xs uppercase tracking-wider py-3 rounded-full cursor-pointer shadow-md min-h-[44px]"
+                        >
+                          Save Expense
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ================================================================= */}
         {/* TAB 1: COUNTER POS ORDER ENTRY                                     */}
         {/* ================================================================= */}
@@ -1005,9 +1891,17 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
                       type="tel"
                       placeholder="10-digit mobile"
                       value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      onChange={(e) => handlePhoneChange(e.target.value)}
                       className="w-full border border-charcoal/20 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-saffron min-h-[44px]"
                     />
+                    {recognizedCustomer && (
+                      <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] text-emerald-800 font-semibold flex items-center space-x-1.5">
+                        <Users className="w-3 h-3 shrink-0" />
+                        <span>
+                          🎉 Returning customer: <strong>{recognizedCustomer.name}</strong> — {recognizedCustomer.totalOrders} past orders · ₹{recognizedCustomer.totalSpend} spent
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {orderType === 'delivery' && (
@@ -1172,30 +2066,36 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
                 </div>
               </div>
 
-              {/* Action Buttons: KOT vs Bill Print */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              {/* Action Buttons: Smart KOT vs Bill Print (table-aware) */}
+              {activeTableId && (
+                <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-semibold flex items-center space-x-1.5">
+                  <Utensils className="w-3 h-3 shrink-0" />
+                  <span>Table session active: <strong>{tableNumber}</strong> — KOT fires only NEW items to kitchen</span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={handlePrintKOT}
+                  onClick={activeTableId ? handleFireTableKOT : handlePrintKOT}
                   disabled={ticketItems.length === 0}
                   className={`bg-charcoal text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-xl flex items-center justify-center space-x-1.5 transition-all duration-150 cursor-pointer min-h-[44px] ${
                     ticketItems.length === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-charcoal/90 shadow-md'
                   }`}
                 >
                   <Flame className="w-4 h-4 text-saffron" />
-                  <span>Print KOT</span>
+                  <span>{activeTableId ? 'Fire KOT' : 'Print KOT'}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handlePrintBill}
+                  onClick={activeTableId ? handleSettleTableBill : handlePrintBill}
                   disabled={ticketItems.length === 0}
                   className={`bg-saffron text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-xl flex items-center justify-center space-x-1.5 transition-all duration-150 cursor-pointer min-h-[44px] ${
                     ticketItems.length === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[#d15423] shadow-md'
                   }`}
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print Bill</span>
+                  <span>{activeTableId ? 'Settle & Print Bill' : 'Print Bill'}</span>
                 </button>
               </div>
             </div>
@@ -1672,6 +2572,78 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
                 >
                   <span className="w-6 h-6 rounded-full bg-white shadow-sm" />
                 </button>
+              </div>
+
+              {/* Announcement / Flash Banner */}
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-sm text-charcoal flex items-center space-x-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      <span>Flash Announcement Banner</span>
+                    </div>
+                    <div className="text-[11px] text-charcoal/60 mt-0.5">
+                      Show a banner above the customer site for weather alerts, festivals, delivery delays, or special events.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => adminStore.saveSettings({
+                      announcementBanner: {
+                        ...(settings.announcementBanner ?? { type: 'custom', text: '' }),
+                        enabled: !(settings.announcementBanner?.enabled ?? false)
+                      }
+                    })}
+                    className={`w-14 h-8 rounded-full transition-colors duration-150 p-1 flex items-center cursor-pointer shrink-0 ${
+                      settings.announcementBanner?.enabled ? 'bg-amber-500 justify-end' : 'bg-charcoal/20 justify-start'
+                    }`}
+                  >
+                    <span className="w-6 h-6 rounded-full bg-white shadow-sm" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 font-mono block">Banner Type</label>
+                    <select
+                      value={settings.announcementBanner?.type ?? 'custom'}
+                      onChange={(e) => adminStore.saveSettings({
+                        announcementBanner: {
+                          ...(settings.announcementBanner ?? { enabled: false, text: '' }),
+                          type: e.target.value as 'weather' | 'festival' | 'rush' | 'custom'
+                        }
+                      })}
+                      className="w-full border border-charcoal/20 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-saffron bg-white"
+                    >
+                      <option value="weather">🌧 Weather / Rain Alert</option>
+                      <option value="festival">🪔 Festival / Occasion</option>
+                      <option value="rush">⏱ High Rush / ETA Delay</option>
+                      <option value="custom">📢 Custom Message</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 font-mono block">Banner Message</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Heavy Rain: Delivery ETA +20 mins"
+                      value={settings.announcementBanner?.text ?? ''}
+                      onChange={(e) => adminStore.saveSettings({
+                        announcementBanner: {
+                          ...(settings.announcementBanner ?? { enabled: false, type: 'custom' }),
+                          text: e.target.value
+                        }
+                      })}
+                      className="w-full border border-charcoal/20 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-saffron bg-white"
+                    />
+                  </div>
+                </div>
+
+                {settings.announcementBanner?.enabled && settings.announcementBanner?.text && (
+                  <div className="bg-amber-100 border border-amber-300 rounded-xl p-3 text-xs font-semibold text-amber-900 flex items-center space-x-2">
+                    <span>✅ Banner is LIVE on customer website:</span>
+                    <span className="italic">"{settings.announcementBanner.text}"</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

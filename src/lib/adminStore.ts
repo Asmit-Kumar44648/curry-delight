@@ -33,6 +33,49 @@ export interface SiteOffer {
   label: string;
 }
 
+export interface AnnouncementBanner {
+  enabled: boolean;
+  type: 'weather' | 'festival' | 'rush' | 'custom';
+  text: string;
+}
+
+export interface KOTBatch {
+  kotNumber: number;
+  printedAt: string;
+  items: CartItem[];
+}
+
+export interface TableSession {
+  tableId: string;
+  tableName: string;
+  guestCount: number;
+  status: 'vacant' | 'occupied' | 'billed';
+  openedAt?: string;
+  customerName?: string;
+  customerPhone?: string;
+  items: CartItem[];
+  kots: KOTBatch[];
+}
+
+export interface PettyExpense {
+  id: string;
+  amount: number;
+  category: 'dairy' | 'vegetables' | 'gas_fuel' | 'maintenance' | 'staff' | 'other';
+  note: string;
+  timestamp: string;
+  staffName?: string;
+}
+
+export interface CustomerProfile {
+  phone: string;
+  name: string;
+  address?: string;
+  totalOrders: number;
+  totalSpend: number;
+  lastOrderDate: string;
+  notes?: string;
+}
+
 export interface AdminSettings {
   /** GST is disabled by default until scheme is explicitly enabled by staff */
   gstEnabled: boolean;
@@ -47,6 +90,7 @@ export interface AdminSettings {
   offer: SiteOffer;
   whatsappNumber: string;
   isKitchenOpen: boolean;
+  announcementBanner?: AnnouncementBanner;
 }
 
 // ─── Default Settings ──────────────────────────────────────────────────────
@@ -69,7 +113,12 @@ const DEFAULT_SETTINGS: AdminSettings = {
     label: 'Flat 15% off on orders above ₹600'
   },
   whatsappNumber: RESTAURANT_INFO.whatsappNumber,
-  isKitchenOpen: true
+  isKitchenOpen: true,
+  announcementBanner: {
+    enabled: false,
+    type: 'weather',
+    text: '🌧️ Heavy Rain Alert: Hot meals being cooked fresh! Deliveries across Kahalgaon & NTPC Township may take 15–20 mins extra.'
+  }
 };
 
 // ─── LocalStorage Keys ─────────────────────────────────────────────────────
@@ -77,7 +126,10 @@ const DEFAULT_SETTINGS: AdminSettings = {
 const STORAGE_KEYS = {
   MENU: 'curry_delight_menu_items',
   SETTINGS: 'curry_delight_settings',
-  POS_ORDERS: 'curry_delight_pos_orders'
+  POS_ORDERS: 'curry_delight_pos_orders',
+  TABLES: 'curry_delight_table_sessions',
+  EXPENSES: 'curry_delight_petty_expenses',
+  CUSTOMERS: 'curry_delight_customer_directory'
 };
 
 // ─── Sound Alert Engine ────────────────────────────────────────────────────
@@ -190,9 +242,21 @@ function dispatchStoreUpdate() {
 
 // ─── Local State Cache ─────────────────────────────────────────────────────
 
+const DEFAULT_TABLES: TableSession[] = Array.from({ length: 10 }, (_, i) => ({
+  tableId: `T${i + 1}`,
+  tableName: `Table ${i + 1}`,
+  guestCount: 2,
+  status: 'vacant',
+  items: [],
+  kots: []
+}));
+
 let _menuItems: MenuItem[] = [];
 let _settings: AdminSettings = { ...DEFAULT_SETTINGS };
 let _posOrders: AdminOrder[] = [];
+let _tableSessions: TableSession[] = [...DEFAULT_TABLES];
+let _pettyExpenses: PettyExpense[] = [];
+let _customerProfiles: Record<string, CustomerProfile> = {};
 let _isInitialized = false;
 
 function loadFromStorage() {
@@ -224,11 +288,36 @@ function loadFromStorage() {
     } else {
       _posOrders = [];
     }
+
+    const storedTables = localStorage.getItem(STORAGE_KEYS.TABLES);
+    if (storedTables) {
+      _tableSessions = JSON.parse(storedTables);
+    } else {
+      _tableSessions = [...DEFAULT_TABLES];
+      localStorage.setItem(STORAGE_KEYS.TABLES, JSON.stringify(_tableSessions));
+    }
+
+    const storedExpenses = localStorage.getItem(STORAGE_KEYS.EXPENSES);
+    if (storedExpenses) {
+      _pettyExpenses = JSON.parse(storedExpenses);
+    } else {
+      _pettyExpenses = [];
+    }
+
+    const storedCustomers = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+    if (storedCustomers) {
+      _customerProfiles = JSON.parse(storedCustomers);
+    } else {
+      _customerProfiles = {};
+    }
   } catch (err) {
     console.warn('Failed reading from localStorage, using in-memory fallbacks', err);
     _menuItems = [...MENU_ITEMS];
     _settings = { ...DEFAULT_SETTINGS };
     _posOrders = [];
+    _tableSessions = [...DEFAULT_TABLES];
+    _pettyExpenses = [];
+    _customerProfiles = {};
   }
 }
 
@@ -255,6 +344,30 @@ function saveOrdersToStorage() {
     localStorage.setItem(STORAGE_KEYS.POS_ORDERS, JSON.stringify(sliced));
   } catch (err) {
     console.error('Failed saving orders to localStorage:', err);
+  }
+}
+
+function saveTablesToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TABLES, JSON.stringify(_tableSessions));
+  } catch (err) {
+    console.error('Failed saving tables to localStorage:', err);
+  }
+}
+
+function saveExpensesToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(_pettyExpenses));
+  } catch (err) {
+    console.error('Failed saving expenses to localStorage:', err);
+  }
+}
+
+function saveCustomersToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(_customerProfiles));
+  } catch (err) {
+    console.error('Failed saving customers to localStorage:', err);
   }
 }
 
@@ -368,6 +481,129 @@ export const adminStore = {
     _posOrders = [];
     saveOrdersToStorage();
     dispatchStoreUpdate();
+  },
+
+  // ─── Dine-In Table Sessions ────────────────────────────────────────────────
+  getTableSessions(): TableSession[] {
+    return _tableSessions;
+  },
+
+  getTableSession(tableId: string): TableSession | undefined {
+    return _tableSessions.find(t => t.tableId === tableId);
+  },
+
+  saveTableSession(session: TableSession) {
+    _tableSessions = _tableSessions.map(t => t.tableId === session.tableId ? session : t);
+    saveTablesToStorage();
+    dispatchStoreUpdate();
+  },
+
+  clearTableSession(tableId: string) {
+    _tableSessions = _tableSessions.map(t => {
+      if (t.tableId === tableId) {
+        return {
+          tableId: t.tableId,
+          tableName: t.tableName,
+          guestCount: 2,
+          status: 'vacant',
+          items: [],
+          kots: []
+        };
+      }
+      return t;
+    });
+    saveTablesToStorage();
+    dispatchStoreUpdate();
+  },
+
+  // ─── Petty Cash / Daily Expenses ───────────────────────────────────────────
+  getPettyExpenses(): PettyExpense[] {
+    return _pettyExpenses;
+  },
+
+  addPettyExpense(expense: Omit<PettyExpense, 'id' | 'timestamp'>): PettyExpense {
+    const newExp: PettyExpense = {
+      ...expense,
+      id: `exp-${Date.now().toString(36)}-${Math.floor(10 + Math.random() * 90)}`,
+      timestamp: new Date().toISOString()
+    };
+    _pettyExpenses = [newExp, ..._pettyExpenses];
+    saveExpensesToStorage();
+    dispatchStoreUpdate();
+    return newExp;
+  },
+
+  deletePettyExpense(id: string) {
+    _pettyExpenses = _pettyExpenses.filter(e => e.id !== id);
+    saveExpensesToStorage();
+    dispatchStoreUpdate();
+  },
+
+  // ─── Customer Directory & Profile ──────────────────────────────────────────
+  getCustomer(phone: string): CustomerProfile | undefined {
+    const cleanPhone = phone.replace(/\D/g, '');
+    return _customerProfiles[cleanPhone];
+  },
+
+  saveCustomer(profile: CustomerProfile) {
+    const cleanPhone = profile.phone.replace(/\D/g, '');
+    _customerProfiles[cleanPhone] = { ...profile, phone: cleanPhone };
+    saveCustomersToStorage();
+    dispatchStoreUpdate();
+  },
+
+  recordCustomerOrder(phone: string, name: string, amount: number, address?: string) {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) return;
+    const existing = _customerProfiles[cleanPhone];
+    if (existing) {
+      existing.name = name || existing.name;
+      if (address) existing.address = address;
+      existing.totalOrders += 1;
+      existing.totalSpend += amount;
+      existing.lastOrderDate = new Date().toISOString();
+      _customerProfiles[cleanPhone] = { ...existing };
+    } else {
+      _customerProfiles[cleanPhone] = {
+        phone: cleanPhone,
+        name: name || 'Customer',
+        address,
+        totalOrders: 1,
+        totalSpend: amount,
+        lastOrderDate: new Date().toISOString()
+      };
+    }
+    saveCustomersToStorage();
+    dispatchStoreUpdate();
+  },
+
+  getAllCustomers(): CustomerProfile[] {
+    return Object.values(_customerProfiles);
+  },
+
+  // ─── Day End Backup (CSV Export) ───────────────────────────────────────────
+  exportOrdersCSV(dateStr?: string): string {
+    const targetDate = dateStr || new Date().toISOString().split('T')[0];
+    const filtered = _posOrders.filter(o => o.createdAt.startsWith(targetDate));
+    const header = ['Order ID', 'Date & Time', 'Type', 'Table', 'Customer Name', 'Phone', 'Payment', 'Subtotal', 'Discount', 'GST', 'Total', 'Items'];
+    const rows = filtered.map(o => {
+      const itemsSummary = o.items.map(i => `${i.menuItem.name} x${i.quantity}`).join('; ');
+      return [
+        o.id,
+        new Date(o.createdAt).toLocaleString('en-IN'),
+        o.deliveryType,
+        o.tableNumber || '-',
+        `"${(o.customerName || '').replace(/"/g, '""')}"`,
+        o.customerPhone || '-',
+        o.paymentMethod.toUpperCase(),
+        o.subtotal,
+        o.discount,
+        o.cgst + o.sgst,
+        o.total,
+        `"${itemsSummary.replace(/"/g, '""')}"`
+      ].join(',');
+    });
+    return [header.join(','), ...rows].join('\n');
   },
 
   // Compatibility stubs for celebratory/reservation forms (now drafts only)
