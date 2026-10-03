@@ -104,6 +104,9 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  // Quick 2-field sticky prompt for WhatsApp orders (no full checkout needed)
+  const [cartQuickName, setCartQuickName] = useState('');
+  const [cartQuickArea, setCartQuickArea] = useState('');
   
   // Customization modal temporary selections
   const [customSpice, setCustomSpice] = useState<'mild' | 'medium' | 'hot' | undefined>('medium');
@@ -502,12 +505,15 @@ export default function App() {
         ` - ₹${item.menuItem.price * item.quantity}\n`;
     });
 
-    const customerDetails = checkoutData.fullName ? (
-      `*Customer:* ${checkoutData.fullName}\n` +
-      `*Phone:* ${checkoutData.phone || 'Provided via WhatsApp'}\n` +
-      `*Type:* ${checkoutData.deliveryType === 'delivery' ? '📍 Home Delivery' : '🏪 Self Takeaway'}\n` +
-      (checkoutData.deliveryType === 'delivery' && checkoutData.address ? `*Address:* ${checkoutData.address}\n` : '')
-    ) : '';
+    // Build customer details from sticky quick fields first, fallback to full checkout form
+    const name = cartQuickName || checkoutData.fullName;
+    const area = cartQuickArea || checkoutData.address;
+    const customerDetails = name ? (
+      `*Customer:* ${name}\n` +
+      `*Phone:* ${checkoutData.phone || 'To be provided on WhatsApp'}\n` +
+      (area ? `*Delivery Area / Landmark:* ${area}\n` : '') +
+      `*Type:* ${checkoutData.deliveryType === 'delivery' ? '📍 Home Delivery' : '🏪 Self Takeaway'}\n`
+    ) : (area ? `*Delivery Area / Landmark:* ${area}\n` : '');
 
     const message = `*NEW ORDER - CURRY DELIGHT KAHALGAON*\n` +
       `----------------------------------------\n` +
@@ -837,9 +843,16 @@ export default function App() {
               
               {/* Hero Copy (Left side on desktop) */}
               <div className="lg:col-span-5 text-left space-y-6">
-                <div className="inline-flex items-center space-x-2 bg-saffron/15 text-saffron px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase font-mono">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Food, Cooked Like Home</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center space-x-1.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 px-3 py-1 rounded-full text-xs font-bold tracking-wider font-mono">
+                    <span>⭐ 4.6 / 5.0</span>
+                    <span className="text-white/60">·</span>
+                    <span className="text-[#FFF9F2]/90">280+ Google Reviews</span>
+                  </div>
+                  <div className="inline-flex items-center space-x-1 bg-white/10 text-[#FFF9F2]/90 border border-white/15 px-3 py-1 rounded-full text-xs font-medium font-mono">
+                    <MapPin className="w-3 h-3 text-saffron" />
+                    <span>Kahalgaon & NTPC Township</span>
+                  </div>
                 </div>
                 
                 <h1 className="font-display font-bold text-5xl md:text-6xl text-white leading-[1.1] tracking-tight">
@@ -850,6 +863,17 @@ export default function App() {
                 <p className="text-[#FFF9F2]/80 text-lg leading-relaxed max-w-xl font-normal">
                   Home-style Indian curries, straight off the tandoor — with Chinese, pizza, and everyday favorites for the rest of the table.
                 </p>
+
+                {/* Delivery Radius & Speed Note */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-[#FFF9F2]/90 max-w-md">
+                  <div className="bg-saffron/20 p-2.5 rounded-xl text-saffron shrink-0">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="text-white block font-medium">Delivering across Kahalgaon Town & NTPC Township</strong>
+                    <p className="text-[11px] text-[#FFF9F2]/60 mt-0.5">Hot meals dispatched to your doorstep within 35–45 mins</p>
+                  </div>
+                </div>
 
                 {/* CTA block - strictly visible above fold on mobile as per requirement */}
                 <div className="flex flex-col sm:flex-row gap-4 pt-2">
@@ -1269,6 +1293,77 @@ export default function App() {
         { url: '/real_counter.jpg', title: 'Fresh Drinks & Counter Bar', category: 'Drinks' },
         { url: '/real_reception.png', title: 'Welcome Reception Counter', category: 'Reception' }
       ]} />
+
+      {/* 7.5 REAL CUSTOMER REVIEWS & LOCAL SOCIAL PROOF */}
+      <section className="bg-white py-16 px-6 border-b border-charcoal/5" id="section-customer-reviews">
+        <div className="max-w-7xl mx-auto space-y-10">
+          <div className="text-center max-w-xl mx-auto space-y-2">
+            <div className="inline-flex items-center space-x-1.5 bg-amber-100 text-amber-900 border border-amber-200 px-3.5 py-1 rounded-full text-xs font-bold font-mono">
+              <span>⭐ 4.6 / 5.0 Google Reviews</span>
+            </div>
+            <h2 className="font-display font-bold text-3xl md:text-4xl text-charcoal">Loved by Kahalgaon Diners</h2>
+            <p className="text-sm text-charcoal/60 font-normal">
+              From NTPC engineers to family dinner regulars, hear what our guests have to say.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-[#FFF9F2] p-6 md:p-8 rounded-3xl border border-charcoal/5 shadow-xs space-y-4 flex flex-col justify-between text-left">
+              <div className="space-y-3">
+                <div className="flex text-amber-500 text-sm">⭐⭐⭐⭐⭐</div>
+                <p className="text-sm text-charcoal/80 italic leading-relaxed">
+                  "The Handi Biryani and Paneer Butter Masala are unmatched in Kahalgaon. Always delivered piping hot to NTPC Colony within 40 minutes."
+                </p>
+              </div>
+              <div className="pt-4 border-t border-charcoal/10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-saffron/15 text-saffron font-bold flex items-center justify-center text-sm font-mono">
+                  AS
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-sm text-charcoal">Abhinav Sharma</h4>
+                  <span className="text-[11px] text-charcoal/50 font-mono">NTPC Township, Kahalgaon</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#FFF9F2] p-6 md:p-8 rounded-3xl border border-charcoal/5 shadow-xs space-y-4 flex flex-col justify-between text-left">
+              <div className="space-y-3">
+                <div className="flex text-amber-500 text-sm">⭐⭐⭐⭐⭐</div>
+                <p className="text-sm text-charcoal/80 italic leading-relaxed">
+                  "Their Royal Veg Thali is hands down the best value lunch. Fresh tandoori rotis, rich dal makhani, and the Gulab Jamun melts in your mouth."
+                </p>
+              </div>
+              <div className="pt-4 border-t border-charcoal/10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-saffron/15 text-saffron font-bold flex items-center justify-center text-sm font-mono">
+                  PK
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-sm text-charcoal">Priya Kumari</h4>
+                  <span className="text-[11px] text-charcoal/50 font-mono">College Road, Kahalgaon</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#FFF9F2] p-6 md:p-8 rounded-3xl border border-charcoal/5 shadow-xs space-y-4 flex flex-col justify-between text-left">
+              <div className="space-y-3">
+                <div className="flex text-amber-500 text-sm">⭐⭐⭐⭐⭐</div>
+                <p className="text-sm text-charcoal/80 italic leading-relaxed">
+                  "We hosted my daughter's birthday dinner here. The ambiance is warm, air conditioning is comfortable, and the staff treats you like family."
+                </p>
+              </div>
+              <div className="pt-4 border-t border-charcoal/10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-saffron/15 text-saffron font-bold flex items-center justify-center text-sm font-mono">
+                  RV
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-sm text-charcoal">Rajesh Verma</h4>
+                  <span className="text-[11px] text-charcoal/50 font-mono">Block Road, Kahalgaon</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
 
             </>
@@ -1711,6 +1806,38 @@ export default function App() {
                     {/* Direct Cart Order Buttons: WhatsApp & Phone Call */}
                     {!isCheckoutOpen ? (
                       <div className="space-y-3 pt-2">
+                        {/* 2-Field Sticky Quick Prompt */}
+                        <div className="bg-cream/80 p-3.5 rounded-2xl border border-charcoal/10 space-y-2 text-left">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/70 font-mono flex items-center gap-1.5">
+                              <span>📍 Quick 1-Tap Delivery Info</span>
+                            </span>
+                            <span className="text-[9px] text-charcoal/40 font-mono">Optional</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <input
+                                type="text"
+                                placeholder="Your Name (e.g. Rahul)"
+                                value={cartQuickName}
+                                onChange={(e) => setCartQuickName(e.target.value)}
+                                className="w-full bg-white border border-charcoal/15 rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-saffron"
+                                id="cart-quick-name-input"
+                              />
+                            </div>
+                            <div>
+                              <input
+                                type="text"
+                                placeholder="Area (e.g. NTPC Colony / Block Rd)"
+                                value={cartQuickArea}
+                                onChange={(e) => setCartQuickArea(e.target.value)}
+                                className="w-full bg-white border border-charcoal/15 rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-saffron"
+                                id="cart-quick-area-input"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
                         <button 
                           onClick={handleDirectCartWhatsApp}
                           className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-base py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-lg cursor-pointer transition-all duration-150 hover:scale-101"

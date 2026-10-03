@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { MenuItem, CartItem, OrderDetails } from '../types';
 import { adminStore, AdminSettings } from '../lib/adminStore';
+import { CATEGORY_IMAGES } from '../data';
 
 interface OnlineOrderingProps {
   cart: CartItem[];
@@ -102,6 +103,28 @@ export default function OnlineOrdering({
   const [searchQuery, setSearchQuery] = useState('');
   const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
   const [activeTier, setActiveTier] = useState<string>('all');
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+
+  const scrollToCategory = (catName: string) => {
+    setIsCategorySheetOpen(false);
+    const elementId = `cat-${catName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    const el = document.getElementById(elementId);
+    if (el) {
+      const yOffset = -90;
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToTier = (tierId: string) => {
+    setIsCategorySheetOpen(false);
+    const el = document.getElementById(`tier-${tierId}`);
+    if (el) {
+      const yOffset = -90;
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
 
   // Checkout form State
   const [checkoutData, setCheckoutData] = useState<OrderDetails>({
@@ -525,7 +548,7 @@ export default function OnlineOrdering({
             ) : (
               <div className="space-y-12">
                 {groupedMenu.map((tier) => (
-                  <section key={tier.id} className="space-y-6">
+                  <section key={tier.id} id={`tier-${tier.id}`} className="space-y-6 scroll-mt-24">
                     {/* Tier Level Header */}
                     <div className="border-b-2 border-saffron/40 pb-2">
                       <h2 className="font-display font-bold text-2xl md:text-3xl text-charcoal tracking-tight flex items-center gap-2">
@@ -540,14 +563,33 @@ export default function OnlineOrdering({
                     {/* Subcategories inside this Tier */}
                     <div className="space-y-8">
                       {tier.categoryGroups.map((catGroup) => (
-                        <div key={catGroup.categoryName} className="bg-white rounded-2xl border border-charcoal/10 shadow-xs overflow-hidden">
-                          {/* Subcategory Header */}
-                          <div className="bg-cream/40 px-5 py-3 border-b border-charcoal/10 flex items-center justify-between">
-                            <h3 className="font-display font-bold text-base md:text-lg text-charcoal">
-                              {catGroup.categoryName}
-                            </h3>
-                            <span className="text-[11px] font-mono text-charcoal/50 font-semibold">
-                              {catGroup.items.length} {catGroup.items.length === 1 ? 'item' : 'items'}
+                        <div 
+                          key={catGroup.categoryName} 
+                          id={`cat-${catGroup.categoryName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                          className="bg-white rounded-2xl border border-charcoal/10 shadow-xs overflow-hidden scroll-mt-24"
+                        >
+                          {/* Subcategory Header with Visual Anchor Thumbnail */}
+                          <div className="bg-cream/40 px-4 sm:px-5 py-3 border-b border-charcoal/10 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              {CATEGORY_IMAGES[catGroup.categoryName] && (
+                                <img 
+                                  src={CATEGORY_IMAGES[catGroup.categoryName]} 
+                                  alt={catGroup.categoryName}
+                                  className="w-11 h-11 rounded-xl object-cover border border-charcoal/10 shadow-xs shrink-0"
+                                  loading="lazy"
+                                />
+                              )}
+                              <div className="min-w-0">
+                                <h3 className="font-display font-bold text-base md:text-lg text-charcoal leading-tight truncate">
+                                  {catGroup.categoryName}
+                                </h3>
+                                <span className="text-[11px] text-charcoal/50 font-normal">
+                                  Chef prepared to order
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-charcoal/60 font-semibold bg-white/80 px-2.5 py-1 rounded-full border border-charcoal/10 shrink-0">
+                              {catGroup.items.length} {catGroup.items.length === 1 ? 'dish' : 'dishes'}
                             </span>
                           </div>
 
@@ -627,6 +669,116 @@ export default function OnlineOrdering({
               </div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Zomato/Swiggy-style "Menu Categories" pill */}
+      {!confirmedOrder && groupedMenu.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <button
+            onClick={() => setIsCategorySheetOpen(true)}
+            className="min-h-[44px] bg-charcoal hover:bg-black text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 border border-white/20 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer text-xs font-bold uppercase tracking-wider font-mono"
+            id="floating-category-menu-btn"
+          >
+            <Utensils className="w-4 h-4 text-saffron" />
+            <span>Menu Categories</span>
+            <span className="bg-saffron text-white text-[10px] px-2 py-0.5 rounded-full">
+              {groupedMenu.reduce((sum, t) => sum + t.categoryGroups.length, 0)}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Floating Category Jump Drawer / Modal */}
+      <AnimatePresence>
+        {isCategorySheetOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCategorySheetOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+            />
+
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+              className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden z-10 text-left"
+            >
+              {/* Sheet Header */}
+              <div className="p-5 border-b border-charcoal/10 flex items-center justify-between bg-cream/40">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-saffron/10 rounded-xl text-saffron">
+                    <Utensils className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-lg text-charcoal">Menu Index</h3>
+                    <p className="text-xs text-charcoal/50">Jump straight to any category with 1 tap</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsCategorySheetOpen(false)}
+                  className="min-h-[44px] min-w-[44px] p-2 text-charcoal/50 hover:text-charcoal hover:bg-charcoal/5 rounded-full flex items-center justify-center cursor-pointer transition-colors"
+                  aria-label="Close category sheet"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Sheet Category List */}
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 divide-y divide-charcoal/5">
+                {groupedMenu.map((tier) => (
+                  <div key={tier.id} className="pt-4 first:pt-0 space-y-2.5">
+                    <div 
+                      onClick={() => scrollToTier(tier.id)}
+                      className="flex items-center justify-between cursor-pointer group"
+                    >
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-saffron font-mono group-hover:underline">
+                        {tier.name}
+                      </span>
+                      <span className="text-[10px] text-charcoal/40 font-mono">Jump to group →</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {tier.categoryGroups.map((catGroup) => (
+                        <button
+                          key={catGroup.categoryName}
+                          onClick={() => scrollToCategory(catGroup.categoryName)}
+                          className="min-h-[44px] flex items-center justify-between p-2.5 rounded-xl border border-charcoal/10 bg-cream/20 hover:bg-cream/70 hover:border-saffron/40 transition-all text-left cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {CATEGORY_IMAGES[catGroup.categoryName] && (
+                              <img 
+                                src={CATEGORY_IMAGES[catGroup.categoryName]} 
+                                alt=""
+                                className="w-8 h-8 rounded-lg object-cover shrink-0" 
+                              />
+                            )}
+                            <span className="text-xs font-bold text-charcoal group-hover:text-saffron truncate">
+                              {catGroup.categoryName}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono text-charcoal/50 font-semibold shrink-0 ml-2">
+                            {catGroup.items.length}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sheet Footer */}
+              <div className="p-4 border-t border-charcoal/10 bg-cream/30 text-center">
+                <span className="text-[11px] text-charcoal/60 font-mono">
+                  Curry Delight Kahalgaon · 190+ Fresh Recipes
+                </span>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -36,48 +36,51 @@ export const SPECIFIC_DISH_IMAGES: Record<string, string> = {
 
 function generateDescription(name: string, category: string): string {
   if (category.includes('Fries')) {
-    return `Golden, crispy, and perfectly seasoned ${name}, cooked to perfection. A perfect side for any meal!`;
+    return `Golden crispy fries dusted with aromatic house spices and herbs.`;
   }
   if (category.includes('Sandwich')) {
-    return `Freshly made ${name}, filled with premium ingredients, toasted golden-brown, and served with house special chutney.`;
+    return `Toasted golden brown with melted cheese, crisp veggies, and mint-coriander chutney.`;
   }
   if (category.includes('Roll')) {
-    return `Soft, warm flatbread rolled with a delicious spiced filling of ${name.toLowerCase()}, mint mayo, and crisp pickled onions.`;
+    return `Hot flakey paratha wrapped with spiced filling, pickled onions, and zesty sauces.`;
   }
   if (category.includes('Pizza')) {
-    return `Freshly baked hand-tossed crust topped with rich tomato sauce, premium mozzarella cheese, and ${name.replace(' Pizza', '').toLowerCase()} toppings.`;
+    return `Hand-stretched crust, spiced marinara sauce, loaded with mozzarella and oven-blistered toppings.`;
   }
   if (category.includes('Beverages') || category.includes('Mocktails') || category.includes('Shakes')) {
-    return `A refreshing, icy-cold glass of premium ${name.toLowerCase()}, crafted with fresh ingredients to quench your thirst.`;
+    return `Chilled, handcrafted refreshment blended with rich syrups, fruits, and pure milk.`;
   }
   if (category.includes('Soups')) {
-    return `A warm, soothing, and deeply flavorful bowl of ${name.toLowerCase()}, prepared fresh daily with authentic aromatic herbs and spices.`;
+    return `Slow-simmered aromatic broth infused with fresh ginger, garlic, and cracked pepper.`;
   }
-  if (category.includes('Starters') || category.includes('Tandoor')) {
-    return `A succulent and mouth-watering starter of ${name.toLowerCase()}, marinated in our chef's signature spiced yogurt blend and charred beautifully.`;
+  if (category.includes('Tandoor')) {
+    return `Marinated in spiced mustard yogurt and charred over burning coal in a traditional clay tandoor.`;
+  }
+  if (category.includes('Starters')) {
+    return `Crisp, wok-tossed bite with fresh bell peppers, spring onions, and sizzling garlic chili sauce.`;
   }
   if (category.includes('Noodle') || category.includes('Chinese')) {
-    return `Wok-tossed hot ${name.toLowerCase()} with crisp fresh garden vegetables, premium sauces, and authentic Indo-Chinese seasonings.`;
+    return `High-flame wok tossed noodles with crunchy julienned veggies and dark soy glaze.`;
   }
   if (category.includes('Indian Gravies') || category.includes('Mutton')) {
-    return `A slow-simmered, rich, and aromatic classic gravy of ${name.toLowerCase()}, prepared using cold-pressed oils, fresh cream, and stone-ground heritage spices.`;
+    return `Slow-cooked in thick cashew-tomato makhani and heritage spices with rich desi ghee aroma.`;
   }
   if (category.includes('Rice') || category.includes('Biryani')) {
-    return `Fragrant, long-grain classic basmati rice layered beautifully with rich aromatics, fresh herbs, saffron, and tender ${name.toLowerCase()}.`;
+    return `Dum-cooked long grain aged basmati layered with saffron, fried onions, and whole spices.`;
   }
   if (category.includes('Breads')) {
-    return `Soft, fresh, and perfectly blistered ${name.toLowerCase()} baked in our traditional ultra-hot tandoor clay oven.`;
+    return `Slapped onto the scorching inner wall of our clay tandoor, brushed with melted butter.`;
   }
   if (category === 'Heritage Thalis') {
     if (name.includes('Veg Thali')) {
-      return `An opulent royal platter featuring Paneer Butter Masala, Dal Makhani, Mix Veg, Steamed Basmati Rice, 2 Butter Tandoori Rotis, Gulab Jamun, Papad, and Raita. Swappable and customizable!`;
+      return `Royal platter: Paneer Butter Masala, Dal Makhani, Mix Veg, Steamed Basmati, 2 Butter Rotis, Gulab Jamun & Raita.`;
     }
     if (name.includes('Chicken Thali')) {
-      return `A rustic local heritage special platter featuring our signature Dehati Chicken Curry, Dal Fry, Jeera Rice, 2 Butter Tandoori Rotis, Green Salad, Papad, and Gulab Jamun. Swappable and customizable!`;
+      return `Dehati chicken curry, Dal Fry, Jeera Rice, 2 Butter Tandoori Rotis, Salad, Papad & Gulab Jamun.`;
     }
-    return `Our supreme ultimate family grand thali feast: Kadhai Paneer, Dal Makhani, Veg Pulao, 2 Garlic Naans, Butter Roti, Gulab Jamun, Veg Raita, Salad, and Roasted Papad.`;
+    return `Grand feast: Kadhai Paneer, Dal Makhani, Veg Pulao, 2 Garlic Naans, Butter Roti, Gulab Jamun, Salad & Raita.`;
   }
-  return `Our signature, freshly prepared ${name.toLowerCase()} cooked using authentic ingredients and traditional family cooking styles.`;
+  return `Freshly prepared with authentic stone-ground spices and home-style cooking.`;
 }
 
 const compactItems: Array<[string, string, number, string, boolean, ('mild' | 'medium' | 'hot')?]> = [
