@@ -66,22 +66,7 @@ export default function Celebrations({ navigateTo }: CelebrationsProps) {
       return;
     }
 
-    try {
-      // Save to the adminStore (Firestore)
-      await adminStore.addCelebration({
-        fullName: formData.fullName,
-        phone: formData.phone,
-        email: formData.email,
-        eventDate: formData.eventDate,
-        headcount: parseInt(formData.headcount) || 10,
-        occasionType: formData.occasionType,
-        budget: formData.budget || undefined,
-        requirements: formData.requirements
-      });
-    } catch (err) {
-      console.error("Failed to save celebration enquiry to Firebase:", err);
-    }
-
+    // Enquiry recorded locally and redirected to WhatsApp confirmation
     setEnquirySubmitted(true);
   };
 

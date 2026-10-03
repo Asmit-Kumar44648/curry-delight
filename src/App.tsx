@@ -36,9 +36,8 @@ import Gallery from './components/Gallery';
 import OnlineOrdering from './components/OnlineOrdering';
 import TableReservation from './components/TableReservation';
 import Celebrations from './components/Celebrations';
-import AdminDashboard from './components/AdminDashboard';
-import { adminStore, AdminSettings, AdminOrder, DeliveryBoy } from './lib/adminStore';
-import { firebaseService } from './lib/firebaseService';
+import POSModule from './components/POSModule';
+import { adminStore, AdminSettings } from './lib/adminStore';
 
 export default function App() {
   // --- Routing State ---
@@ -81,31 +80,22 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-  // --- Dynamic Menu Items, Settings & Site Content ---
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  // --- Dynamic Menu Items & Settings from localStorage-backed adminStore ---
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => adminStore.getMenuItems());
   const [settings, setSettings] = useState<AdminSettings>(() => adminStore.getSettings());
-  const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
-  const [isLoading, setIsLoading] = useState(!adminStore.isInitialized);
   
   useEffect(() => {
     setMenuItems(adminStore.getMenuItems());
     setSettings(adminStore.getSettings());
-    setOrders(adminStore.getOrders());
-    setDeliveryBoys(adminStore.getDeliveryBoys());
-    setIsLoading(!adminStore.isInitialized);
-    const handleStorageChange = () => {
-      setMenuItems(adminStore.getMenuItems());
-      setSettings(adminStore.getSettings());
-      setOrders(adminStore.getOrders());
-      setDeliveryBoys(adminStore.getDeliveryBoys());
-      setIsLoading(!adminStore.isInitialized);
+    const handleStoreChange = () => {
+      setMenuItems([...adminStore.getMenuItems()]);
+      setSettings({ ...adminStore.getSettings() });
     };
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('adminStoreUpdate', handleStorageChange);
+    window.addEventListener('storage', handleStoreChange);
+    window.addEventListener('adminStoreUpdate', handleStoreChange);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('adminStoreUpdate', handleStorageChange);
+      window.removeEventListener('storage', handleStoreChange);
+      window.removeEventListener('adminStoreUpdate', handleStoreChange);
     };
   }, []);
 
@@ -155,17 +145,6 @@ export default function App() {
     specialRequests: ''
   });
 
-  // --- Checkout form State ---
-  const [checkoutData, setCheckoutData] = useState<OrderDetails>({
-    fullName: '',
-    phone: '',
-    address: '',
-    deliveryType: 'delivery',
-    paymentMethod: 'cod',
-    specialInstructions: ''
-  });
-  
-  // --- Order confirmation state ---
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderId: string;
     estimatedTime: string;
@@ -177,18 +156,15 @@ export default function App() {
     total: number;
   } | null>(null);
 
-  const [liveOrder, setLiveOrder] = useState<AdminOrder | null>(null);
-
-  useEffect(() => {
-    if (!orderConfirmation?.orderId) {
-      setLiveOrder(null);
-      return;
-    }
-    const unsub = firebaseService.subscribeToOrder(orderConfirmation.orderId, (order) => {
-      setLiveOrder(order);
-    });
-    return () => unsub();
-  }, [orderConfirmation]);
+  // --- Checkout form State ---
+  const [checkoutData, setCheckoutData] = useState<OrderDetails>({
+    fullName: '',
+    phone: '',
+    address: '',
+    deliveryType: 'delivery',
+    paymentMethod: 'cod',
+    specialInstructions: ''
+  });
 
   // --- Active Tab for Scroll Spy / Quick Navigation ---
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'about' | 'gallery' | 'reservation' | 'contact'>('home');
@@ -385,27 +361,12 @@ export default function App() {
     setCart(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // --- Reservation handlers ---
   const handleReservationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (reservationStep < 3) {
       setReservationStep(prev => prev + 1);
     } else {
-      // Save reservation to Firestore
-      try {
-        await adminStore.addReservation({
-          fullName: reservationData.fullName,
-          phone: reservationData.phone,
-          partySize: reservationData.partySize,
-          date: reservationData.date,
-          timeSlot: reservationData.timeSlot,
-          specialRequests: reservationData.specialRequests || undefined
-        });
-      } catch (err) {
-        console.error("Failed to save reservation to Firebase:", err);
-      }
-
-      // Trigger WhatsApp API link for the reservation
+      // No database write — reservation goes directly via WhatsApp
       const message = `Namaste Curry Delight Kahalgaon! I would like to reserve a table:\n\n` +
         `• *Name:* ${reservationData.fullName}\n` +
         `• *Phone:* ${reservationData.phone}\n` +
@@ -417,10 +378,8 @@ export default function App() {
 
       const encodedMessage = encodeURIComponent(message);
       const waNumber = settings?.whatsappNumber || '917061591831';
-      // Opens WhatsApp deep link with structured text
       window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
       
-      // Reset step
       alert("Opening WhatsApp to send reservation details. Thank you for booking with Curry Delight!");
       setReservationStep(1);
       setReservationData({
@@ -474,14 +433,14 @@ export default function App() {
       return;
     }
 
-    const mockOrderId = `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderId = `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const kitchenBuffer = settings?.kitchenBufferMinutes || 0;
     const baseMin = checkoutData.deliveryType === 'delivery' ? 45 : 20;
     const baseMax = checkoutData.deliveryType === 'delivery' ? 55 : 25;
     const estimatedTime = `${baseMin + kitchenBuffer}-${baseMax + kitchenBuffer} mins`;
 
     const confirmation = {
-      orderId: mockOrderId,
+      orderId,
       estimatedTime,
       items: [...cart],
       summary: { ...checkoutData },
@@ -491,26 +450,10 @@ export default function App() {
       total: cartTotal
     };
 
-    // Save to the Live Order Queue (adminStore) — fire-and-forget with error handling
-    adminStore.addOrder({
-      customerName: checkoutData.fullName,
-      customerPhone: checkoutData.phone,
-      customerAddress: checkoutData.deliveryType === 'delivery' ? checkoutData.address : 'Pickup Order',
-      deliveryType: checkoutData.deliveryType,
-      paymentMethod: checkoutData.paymentMethod,
-      subtotal: cartSubtotal,
-      discount: discountAmount,
-      deliveryFee,
-      total: cartTotal,
-      items: [...cart],
-      specialInstructions: checkoutData.specialInstructions,
-      source: 'online'
-    }, mockOrderId).catch(err => {
-      console.error('Order write to Firebase failed:', err);
-    });
-
+    // No database write — the customer will send order via WhatsApp in the next step.
+    // This is local state only; the confirmation screen shows WhatsApp + Call options.
     setOrderConfirmation(confirmation);
-    setCart([]); // Clear cart
+    setCart([]);
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
   };
@@ -572,34 +515,13 @@ export default function App() {
     });
   }, [selectedCategory, searchQuery, menuItems]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-charcoal flex flex-col items-center justify-center space-y-4 text-center p-6">
-        <div className="bg-saffron p-4 rounded-full text-[#FFF9F2] flex items-center justify-center animate-bounce shadow-lg shadow-saffron/20">
-          <Flame className="w-10 h-10 animate-pulse" />
-        </div>
-        <h2 className="font-display font-bold text-3xl text-[#FFF9F2] tracking-tight">Curry Delight</h2>
-        <p className="text-cream/50 text-[10px] tracking-widest uppercase animate-pulse">Connecting to Live Kitchen Server...</p>
-      </div>
-    );
-  }
-
-  if (currentPath === '/admin') {
+  if (currentPath === '/admin' || currentPath === '/pos') {
     return (
       <div className="min-h-screen bg-cream font-sans text-charcoal">
-        <AdminDashboard navigateTo={navigateTo} />
+        <POSModule navigateTo={navigateTo} />
       </div>
     );
   }
-
-  // Find order in dynamically fetched liveOrder state
-  const currentLiveOrder = liveOrder;
-  const currentStatus = currentLiveOrder ? currentLiveOrder.status : 'placed';
-  const assignedBoy = currentLiveOrder?.assignedDeliveryBoyId ? {
-    id: currentLiveOrder.assignedDeliveryBoyId,
-    name: currentLiveOrder.assignedDeliveryBoyName || 'Delivery Rider',
-    phone: currentLiveOrder.assignedDeliveryBoyPhone || ''
-  } : null;
 
   return (
     <div className="min-h-screen bg-cream font-sans text-ink selection:bg-saffron selection:text-white">
@@ -1942,18 +1864,20 @@ export default function App() {
               id="customizer-modal"
             >
               
-              {/* Cover Photo */}
-              <div className="relative h-48 md:h-56 bg-charcoal/5">
-                <img src={customizingItem.image} alt={customizingItem.name} className="w-full h-full object-cover" />
-                
-                {/* AI tag */}
-                <div className="absolute top-3 right-3 bg-charcoal/80 backdrop-blur-xs text-[8px] text-cream px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold z-10">
-                  AI Generated
+              {/* Typography Modal Header (No Images) */}
+              <div className="bg-charcoal text-[#FFF9F2] p-5 flex items-center justify-between border-b border-white/10">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-3.5 h-3.5 border-2 flex items-center justify-center p-0.5 rounded-xs ${customizingItem.isVeg ? 'border-green-400' : 'border-red-400'}`}>
+                    <div className={`w-2 h-2 rounded-full ${customizingItem.isVeg ? 'bg-green-400' : 'bg-red-400'}`} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-saffron font-bold block">{customizingItem.category}</span>
+                    <h3 className="font-display font-bold text-lg text-white leading-tight">{customizingItem.name}</h3>
+                  </div>
                 </div>
-
                 <button 
                   onClick={() => setCustomizingItem(null)}
-                  className="absolute top-3 left-3 bg-charcoal/70 text-cream hover:bg-saffron p-1.5 rounded-full cursor-pointer focus:outline-none"
+                  className="bg-white/10 text-white hover:bg-saffron p-2 rounded-full cursor-pointer focus:outline-none transition-colors duration-150"
                   aria-label="Close"
                   id="close-customizer-btn"
                 >
@@ -2247,122 +2171,27 @@ export default function App() {
               
               <div className="text-center space-y-3">
                 <div className="bg-emerald-100 p-3.5 rounded-full text-emerald-600 inline-flex items-center justify-center mb-1">
-                  <CheckCircle2 className="w-10 h-10 animate-bounce" />
+                  <CheckCircle2 className="w-10 h-10 text-emerald-600" />
                 </div>
                 <h3 className="font-display font-bold text-2xl text-charcoal">
-                  {currentStatus === 'cancelled' ? 'Order Cancelled' : currentStatus === 'delivered' || currentStatus === 'completed' ? 'Delivered & Enjoy!' : 'Your Order is Cooking!'}
+                  Order Summary Ready!
                 </h3>
                 <p className="text-xs text-emerald-800 font-bold bg-emerald-50 px-3.5 py-1.5 rounded-full inline-block font-mono">
-                  Order Code: {orderConfirmation.orderId}
+                  Order Reference: {orderConfirmation.orderId}
                 </p>
-                <p className="text-xs text-charcoal/50 font-normal block">
-                  Estimated Ready Time: <strong className="text-charcoal font-bold">{orderConfirmation.estimatedTime}</strong>
-                </p>
-
-                {/* --- LIVE PIZZA TRACKER TRACKING BAR --- */}
-                <div className="pt-4 pb-2 px-1">
-                  <div className="relative flex items-center justify-between w-full">
-                    {/* Background Progress Bar Line */}
-                    <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-charcoal/10 rounded-full -z-1" />
-                    
-                    {/* Fill Progress Bar Line */}
-                    <div 
-                      className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-saffron rounded-full -z-1 transition-all duration-500" 
-                      style={{ 
-                        width: currentStatus === 'placed' ? '0%' : 
-                               currentStatus === 'preparing' ? '33.33%' : 
-                               currentStatus === 'out_for_delivery' ? '66.66%' : 
-                               ['delivered', 'completed'].includes(currentStatus) ? '100%' : '0%'
-                      }}
-                    />
-
-                    {/* Step 1: Placed */}
-                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                        ['placed', 'preparing', 'out_for_delivery', 'delivered', 'completed'].includes(currentStatus) 
-                          ? 'bg-saffron border-saffron text-white' 
-                          : 'bg-white border-charcoal/20 text-charcoal/30'
-                      }`}>
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <span className="text-[9px] font-bold text-charcoal/60">Received</span>
-                    </div>
-
-                    {/* Step 2: Preparing */}
-                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                        ['preparing', 'out_for_delivery', 'delivered', 'completed'].includes(currentStatus) 
-                          ? 'bg-saffron border-saffron text-white' 
-                          : 'bg-white border-charcoal/20 text-charcoal/30'
-                      }`}>
-                        <Flame className={`w-4 h-4 ${currentStatus === 'preparing' ? 'animate-pulse' : ''}`} />
-                      </div>
-                      <span className="text-[9px] font-bold text-charcoal/60">Cooking</span>
-                    </div>
-
-                    {/* Step 3: Out/Ready */}
-                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                        ['out_for_delivery', 'delivered', 'completed'].includes(currentStatus) 
-                          ? 'bg-saffron border-saffron text-white' 
-                          : 'bg-white border-charcoal/20 text-charcoal/30'
-                      }`}>
-                        <ShoppingBag className="w-4 h-4" />
-                      </div>
-                      <span className="text-[9px] font-bold text-charcoal/60">
-                        {orderConfirmation.summary.deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready'}
-                      </span>
-                    </div>
-
-                    {/* Step 4: Completed */}
-                    <div className="flex flex-col items-center space-y-1 bg-white px-2 relative z-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                        ['delivered', 'completed'].includes(currentStatus) 
-                          ? 'bg-emerald-500 border-emerald-500 text-white' 
-                          : 'bg-white border-charcoal/20 text-charcoal/30'
-                      }`}>
-                        <Award className="w-4 h-4" />
-                      </div>
-                      <span className="text-[9px] font-bold text-charcoal/60">Enjoy!</span>
-                    </div>
-                  </div>
-
-                  {/* Status update description */}
-                  <p className="text-[11px] text-center text-charcoal/60 mt-4 bg-cream/30 p-2.5 rounded-xl border border-charcoal/5">
-                    <strong>Status: </strong>
-                    {currentStatus === 'placed' && "We've received your order. The kitchen is confirming the items."}
-                    {currentStatus === 'preparing' && "Chef is in the kitchen preparing your fresh meal now."}
-                    {currentStatus === 'out_for_delivery' && (orderConfirmation.summary.deliveryType === 'delivery' ? "Freshly cooked and dispatched! Our delivery rider is on the way." : "Cooking completed! Your package is hot and ready for pickup.")}
-                    {(currentStatus === 'delivered' || currentStatus === 'completed') && "Order delivered/picked up successfully! Enjoy your Curry Delight meal!"}
-                    {currentStatus === 'cancelled' && "This order has been cancelled by the admin."}
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-center mt-2">
+                  <p className="text-xs font-semibold text-amber-900">
+                    "We'll confirm your order on WhatsApp or by phone shortly."
                   </p>
-
-                  {/* Delivery Boy Card */}
-                  {currentStatus === 'out_for_delivery' && assignedBoy && (
-                    <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-2xl p-3 flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
-                          {assignedBoy.name[0]}
-                        </div>
-                        <div className="text-left">
-                          <div className="text-xs font-bold text-emerald-950">Rider: {assignedBoy.name}</div>
-                          <div className="text-[10px] text-emerald-800">Delivering your hot order now</div>
-                        </div>
-                      </div>
-                      <a 
-                        href={`tel:${assignedBoy.phone}`} 
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5"
-                      >
-                        <Phone className="w-3.5 h-3.5" /> Call Rider
-                      </a>
-                    </div>
-                  )}
+                  <p className="text-[11px] text-amber-800/80 mt-1">
+                    Please send your order via WhatsApp or tap Call to Order below to complete.
+                  </p>
                 </div>
               </div>
 
               {/* Order breakdown summary */}
               <div className="border-y border-charcoal/10 py-5 space-y-4 text-xs text-charcoal/90">
-                <h4 className="font-bold text-charcoal uppercase tracking-wider text-[10px] font-mono">Order Summary</h4>
+                <h4 className="font-bold text-charcoal uppercase tracking-wider text-[10px] font-mono">Order Details</h4>
                 
                 <div className="max-h-36 overflow-y-auto space-y-2.5">
                   {orderConfirmation.items.map((item, idx) => (
@@ -2394,7 +2223,7 @@ export default function App() {
                     </span>
                   </div>
                   <div className="flex justify-between text-sm font-bold text-charcoal border-t border-charcoal/10 pt-3">
-                    <span>Grand Total Paid via {orderConfirmation.summary.paymentMethod.toUpperCase()}</span>
+                    <span>Total Amount</span>
                     <span className="text-saffron font-tabular-nums text-lg">₹{orderConfirmation.total}</span>
                   </div>
                 </div>
@@ -2402,11 +2231,11 @@ export default function App() {
                 {/* Customer Details */}
                 <div className="bg-cream/40 p-4 rounded-2xl border border-charcoal/5 space-y-1.5 mt-2 text-[11px] leading-relaxed">
                   <div><strong>Customer Name:</strong> {orderConfirmation.summary.fullName}</div>
-                  <div><strong>Phone Line:</strong> {orderConfirmation.summary.phone}</div>
+                  <div><strong>Phone:</strong> {orderConfirmation.summary.phone}</div>
                   {orderConfirmation.summary.deliveryType === 'delivery' ? (
-                    <div><strong>Home Address:</strong> {orderConfirmation.summary.address}</div>
+                    <div><strong>Delivery Address:</strong> {orderConfirmation.summary.address}</div>
                   ) : (
-                    <div><strong>Takeaway Type:</strong> Self Pickup at Curry Delight, Shiv Parvati Nagar (Block Rd)</div>
+                    <div><strong>Type:</strong> Self Pickup at Curry Delight, Shiv Parvati Nagar (Block Rd)</div>
                   )}
                   {orderConfirmation.summary.specialInstructions && (
                     <div className="italic mt-1 text-charcoal/65"><strong>Note:</strong> "{orderConfirmation.summary.specialInstructions}"</div>
@@ -2414,23 +2243,32 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Order completion deep links */}
-              <div className="space-y-3.5">
+              {/* Order completion clear action buttons */}
+              <div className="space-y-3">
                 <button 
                   onClick={() => handleSendOrderWhatsApp(orderConfirmation)}
-                  className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-sm py-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer focus:outline-none hover:scale-101 transition-all"
+                  className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all duration-150"
                   id="whatsapp-send-order-btn"
                 >
-                  <MessageSquare className="w-4 h-4 fill-white text-[#25D366]" />
-                  <span>Send Order to WhatsApp (Recommended)</span>
+                  <MessageSquare className="w-5 h-5 fill-white text-[#25D366]" />
+                  <span>Send via WhatsApp</span>
                 </button>
                 
+                <a 
+                  href={`tel:${settings?.contactPhone || '+917061591831'}`}
+                  className="w-full min-h-[44px] bg-saffron hover:bg-[#d05220] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer text-center transition-all duration-150"
+                  id="call-to-order-btn"
+                >
+                  <Phone className="w-5 h-5" />
+                  <span>Call to Order ({settings?.contactPhone || '+91 70615 91831'})</span>
+                </a>
+
                 <button 
                   onClick={() => setOrderConfirmation(null)}
-                  className="w-full bg-charcoal hover:bg-charcoal/90 text-white font-bold text-xs py-3 rounded-full cursor-pointer focus:outline-none text-center"
+                  className="w-full min-h-[44px] bg-charcoal hover:bg-charcoal/90 text-white font-bold text-xs py-3 rounded-full cursor-pointer transition-all duration-150 text-center"
                   id="close-confirmation-modal-btn"
                 >
-                  Dismiss & Back to Site
+                  Dismiss & Back to Menu
                 </button>
               </div>
 

@@ -60,20 +60,7 @@ export default function TableReservation({ navigateTo }: TableReservationProps) 
       return;
     }
     
-    try {
-      // Save to Firestore via adminStore
-      await adminStore.addReservation({
-        fullName: guestDetails.fullName,
-        phone: guestDetails.phone,
-        partySize,
-        date: bookingDate,
-        timeSlot,
-        specialRequests: guestDetails.specialRequests
-      });
-    } catch (err) {
-      console.error("Failed to save table reservation to Firebase:", err);
-    }
-
+    // Reservation saved locally and customer redirected to WhatsApp
     setIsConfirmed(true);
   };
 
