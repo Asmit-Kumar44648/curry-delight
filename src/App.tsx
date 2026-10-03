@@ -491,6 +491,42 @@ export default function App() {
     window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
   };
 
+  const handleDirectCartWhatsApp = () => {
+    if (cart.length === 0) return;
+
+    let itemsText = '';
+    cart.forEach((item, idx) => {
+      itemsText += `${idx + 1}. *${item.menuItem.name}* x${item.quantity}` +
+        (item.selectedSpice ? ` [${item.selectedSpice}]` : '') +
+        (item.specialInstructions ? ` (Note: ${item.specialInstructions})` : '') +
+        ` - ₹${item.menuItem.price * item.quantity}\n`;
+    });
+
+    const customerDetails = checkoutData.fullName ? (
+      `*Customer:* ${checkoutData.fullName}\n` +
+      `*Phone:* ${checkoutData.phone || 'Provided via WhatsApp'}\n` +
+      `*Type:* ${checkoutData.deliveryType === 'delivery' ? '📍 Home Delivery' : '🏪 Self Takeaway'}\n` +
+      (checkoutData.deliveryType === 'delivery' && checkoutData.address ? `*Address:* ${checkoutData.address}\n` : '')
+    ) : '';
+
+    const message = `*NEW ORDER - CURRY DELIGHT KAHALGAON*\n` +
+      `----------------------------------------\n` +
+      (customerDetails ? customerDetails + `----------------------------------------\n` : '') +
+      `*ITEMS IN CART:*\n${itemsText}` +
+      `----------------------------------------\n` +
+      `*Subtotal:* ₹${cartSubtotal}\n` +
+      (discountAmount > 0 ? `*Discount (${settings?.offer?.code || 'PROMO'}):* -₹${discountAmount}\n` : '') +
+      `*Delivery Charge:* ₹${deliveryFee}\n` +
+      `*GRAND TOTAL:* ₹${cartTotal}\n` +
+      `----------------------------------------\n` +
+      (checkoutData.specialInstructions ? `*Instructions:* ${checkoutData.specialInstructions}\n` : '') +
+      `Please confirm receipt and initiate cooking!`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const waNumber = settings?.whatsappNumber || '917061591831';
+    window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
+  };
+
   // --- Scroll Spy for sticky CTA header visibility ---
   const [showStickyBottomBar, setShowStickyBottomBar] = useState(false);
   useEffect(() => {
@@ -1672,16 +1708,36 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Checkout Form Toggle */}
+                    {/* Direct Cart Order Buttons: WhatsApp & Phone Call */}
                     {!isCheckoutOpen ? (
-                      <button 
-                        onClick={() => setIsCheckoutOpen(true)}
-                        className="w-full bg-saffron hover:bg-[#d15423] text-white font-bold text-base py-4 rounded-full flex items-center justify-center space-x-2 shadow-lg cursor-pointer focus:outline-none hover:scale-102 transition-all"
-                        id="cart-checkout-toggle-btn"
-                      >
-                        <span>Proceed to Checkout</span>
-                        <ArrowRight className="w-5 h-5" />
-                      </button>
+                      <div className="space-y-3 pt-2">
+                        <button 
+                          onClick={handleDirectCartWhatsApp}
+                          className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-base py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-lg cursor-pointer transition-all duration-150 hover:scale-101"
+                          id="cart-whatsapp-direct-btn"
+                        >
+                          <MessageSquare className="w-5 h-5 fill-white text-[#25D366]" />
+                          <span>Order via WhatsApp (₹{cartTotal})</span>
+                        </button>
+
+                        <a 
+                          href={`tel:${settings?.contactPhone || '+917061591831'}`}
+                          className="w-full min-h-[44px] bg-saffron hover:bg-[#d05220] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all duration-150 text-center"
+                          id="cart-call-direct-btn"
+                        >
+                          <Phone className="w-4 h-4" />
+                          <span>Call to Order ({settings?.contactPhone || '+91 70615 91831'})</span>
+                        </a>
+
+                        <button 
+                          onClick={() => setIsCheckoutOpen(true)}
+                          className="w-full min-h-[44px] bg-charcoal/5 hover:bg-charcoal/10 text-charcoal font-bold text-xs py-3 rounded-full flex items-center justify-center space-x-1.5 cursor-pointer transition-all duration-150"
+                          id="cart-checkout-toggle-btn"
+                        >
+                          <span>Add Delivery Address & Details</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     ) : (
                       <div className="space-y-5 pt-4 border-t border-charcoal/10">
                         <div className="flex items-center justify-between">
@@ -1821,14 +1877,26 @@ export default function App() {
                             />
                           </div>
 
-                          {/* Order Placement Trigger */}
-                          <button 
-                            type="submit"
-                            className="w-full bg-charcoal hover:bg-charcoal/90 text-white font-bold text-base py-4.5 rounded-full flex items-center justify-center space-x-2 shadow-xl mt-6 cursor-pointer focus:outline-none hover:scale-102 active:scale-98 transition-all"
-                            id="place-order-submit-btn"
-                          >
-                            <span>Confirm & Place Order (₹{cartTotal})</span>
-                          </button>
+                          {/* Order Placement Triggers: WhatsApp & Call */}
+                          <div className="space-y-3 mt-6">
+                            <button 
+                              type="submit"
+                              className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-base py-4 rounded-full flex items-center justify-center space-x-2 shadow-lg cursor-pointer transition-all duration-150 hover:scale-101"
+                              id="place-order-submit-btn"
+                            >
+                              <MessageSquare className="w-5 h-5 fill-white text-[#25D366]" />
+                              <span>Confirm & Send via WhatsApp (₹{cartTotal})</span>
+                            </button>
+
+                            <a 
+                              href={`tel:${settings?.contactPhone || '+917061591831'}`}
+                              className="w-full min-h-[44px] bg-saffron hover:bg-[#d05220] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all duration-150 text-center"
+                              id="checkout-call-order-btn"
+                            >
+                              <Phone className="w-4 h-4" />
+                              <span>Call to Order ({settings?.contactPhone || '+91 70615 91831'})</span>
+                            </a>
+                          </div>
 
                         </form>
                       </div>

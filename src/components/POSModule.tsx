@@ -620,18 +620,7 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
             </p>
           </div>
 
-          {/* Security Notice specified in Step 5 */}
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left space-y-1">
-            <div className="flex items-center space-x-1.5 text-amber-800 font-bold text-[11px] font-mono uppercase tracking-wider">
-              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span>Access Gate Security Notice</span>
-            </div>
-            <p className="text-[11px] text-amber-900/80 leading-relaxed font-normal">
-              SECURITY NOTE: this credential is visible to anyone who inspects the page source or JavaScript bundle.
-              This blocks casual access only, not a determined person with basic browser dev tools. Acceptable only
-              because no sensitive payment or personal data is exposed behind this gate.
-            </p>
-          </div>
+          {/* Note: Security disclaimer is maintained in adminAuth.ts code comments */}
 
           {loginError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3.5 rounded-xl font-medium">

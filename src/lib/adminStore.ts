@@ -1,5 +1,5 @@
 import { CartItem, MenuItem } from '../types';
-import { MENU_ITEMS } from '../data';
+import { MENU_ITEMS, SPECIFIC_DISH_IMAGES } from '../data';
 import { RESTAURANT_INFO } from '../config/adminAuth';
 
 // ─── Type Exports ──────────────────────────────────────────────────────────
@@ -199,7 +199,12 @@ function loadFromStorage() {
   try {
     const storedMenu = localStorage.getItem(STORAGE_KEYS.MENU);
     if (storedMenu) {
-      _menuItems = JSON.parse(storedMenu);
+      _menuItems = JSON.parse(storedMenu).map((item: MenuItem) => {
+        if (SPECIFIC_DISH_IMAGES[item.id]) {
+          return { ...item, image: SPECIFIC_DISH_IMAGES[item.id] };
+        }
+        return item;
+      });
     } else {
       _menuItems = [...MENU_ITEMS];
       localStorage.setItem(STORAGE_KEYS.MENU, JSON.stringify(_menuItems));

@@ -2,23 +2,36 @@ import { MenuItem } from './types';
 
 export const CATEGORY_IMAGES: Record<string, string> = {
   'French Fries': 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=600&q=80',
-  'Sandwiches': 'https://images.unsplash.com/photo-1509722747041-616f39b57569?auto=format&fit=crop&w=600&q=80',
+  'Sandwiches': 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=600&q=80',
   'Rolls': 'https://images.unsplash.com/photo-1626132647523-66f5bf380027?auto=format&fit=crop&w=600&q=80',
   'Pizza Hub': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80',
   'Mocktails, Shakes & Beverages': 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=600&q=80',
   'Soups': 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=600&q=80',
-  'Starters (Veg)': 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80',
-  'Starters (Non-Veg)': 'https://images.unsplash.com/photo-1601050690597-df056fb4ce78?auto=format&fit=crop&w=600&q=80',
-  'From the Tandoor (Veg)': 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80',
+  'Starters (Veg)': 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80',
+  'Starters (Non-Veg)': 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=600&q=80',
+  'From the Tandoor (Veg)': 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80',
   'From the Tandoor (Non-Veg)': 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=600&q=80',
   'Noodle Junction': 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=600&q=80',
   'Chinese Gravies': 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=600&q=80',
-  'Classic Indian Gravies (Veg)': 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+  'Classic Indian Gravies (Veg)': 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=600&q=80',
   'Classic Indian Gravies (Non-Veg)': 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=600&q=80',
-  'Rice & Biryani': 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
-  'Indian Breads': 'https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?auto=format&fit=crop&w=600&q=80',
+  'Rice & Biryani': 'https://images.unsplash.com/photo-1563379091339-03b21bc4a4f8?auto=format&fit=crop&w=600&q=80',
+  'Indian Breads': 'https://images.unsplash.com/photo-1626074353765-517a681e40be?auto=format&fit=crop&w=600&q=80',
   'Desserts & Accompaniments': 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80',
-  'Heritage Thalis': 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80'
+  'Heritage Thalis': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80'
+};
+
+export const SPECIFIC_DISH_IMAGES: Record<string, string> = {
+  'bir-chk': 'https://images.unsplash.com/photo-1563379091339-03b21bc4a4f8?auto=format&fit=crop&w=600&q=80', // Chicken Biryani
+  'ind-paneer-butter': 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=600&q=80', // Paneer Butter Masala
+  'bread-naan-butter': 'https://images.unsplash.com/photo-1626074353765-517a681e40be?auto=format&fit=crop&w=600&q=80', // Butter Naan
+  'starter-chilli-paneer-dry': 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80', // Chilli Paneer Dry
+  'pizza-veg-over-md': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80', // Veggie Overloaded Pizza
+  'shake-kesar': 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80', // Kesar Badam Milkshake
+  'thali-royal-veg': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80', // Royal Veg Thali
+  'thali-dehati-nonveg': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80', // Dehati Chicken Thali
+  'thali-delight-jumbo': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80', // Jumbo Feast Thali
+  'des-gulab': 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80', // Gulab Jamun
 };
 
 function generateDescription(name: string, category: string): string {
@@ -331,7 +344,7 @@ export const MENU_ITEMS: MenuItem[] = compactItems.map(([id, name, price, catego
     category,
     isVeg,
     spiceLevel: spiceLevel || (category.includes('Biryani') || category.includes('Gravies') ? 'medium' : undefined),
-    image: CATEGORY_IMAGES[category] || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+    image: SPECIFIC_DISH_IMAGES[id] || CATEGORY_IMAGES[category] || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
     imagePrompt: `Gourmet food presentation of ${name}, elegant plating in high-end Indian restaurant context, cinematic warm lighting, close-up details, 4:3 aspect ratio`,
     badge: name.includes('Spl.') || name.includes('Combo') ? 'Chef\'s Pick' : undefined
   };
