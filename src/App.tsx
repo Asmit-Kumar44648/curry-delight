@@ -1124,9 +1124,9 @@ export default function App() {
                         loading="lazy"
                       />
                       
-                      {/* AI tag */}
+                      {/* Fresh Chef Special tag */}
                       <div className="absolute bottom-2.5 right-2.5 bg-charcoal/70 backdrop-blur-xs text-[8px] text-white px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold z-10 select-none">
-                        AI Generated
+                        Freshly Prepared
                       </div>
 
                       {/* Veg / Non-Veg Overlay */}

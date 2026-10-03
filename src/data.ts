@@ -22,12 +22,12 @@ export const CATEGORY_IMAGES: Record<string, string> = {
 };
 
 export const SPECIFIC_DISH_IMAGES: Record<string, string> = {
-  'bir-chk': 'https://images.unsplash.com/photo-1563379091339-03b21bc4a4f8?auto=format&fit=crop&w=600&q=80', // Chicken Biryani
+  'bir-chk': '/dishes/chicken-biryani.png', // Chicken Biryani (from Google Drive)
   'ind-paneer-butter': 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=600&q=80', // Paneer Butter Masala
-  'bread-naan-butter': 'https://images.unsplash.com/photo-1626074353765-517a681e40be?auto=format&fit=crop&w=600&q=80', // Butter Naan
+  'bread-naan-butter': '/dishes/butter-naan.png', // Butter Naan (from Google Drive)
   'starter-chilli-paneer-dry': 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80', // Chilli Paneer Dry
   'pizza-veg-over-md': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80', // Veggie Overloaded Pizza
-  'shake-kesar': 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=600&q=80', // Kesar Badam Milkshake
+  'shake-kesar': '/dishes/kesar-badam-shake.png', // Kesar Badam Milkshake (from Google Drive)
   'thali-royal-veg': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80', // Royal Veg Thali
   'thali-dehati-nonveg': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80', // Dehati Chicken Thali
   'thali-delight-jumbo': 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80', // Jumbo Feast Thali
