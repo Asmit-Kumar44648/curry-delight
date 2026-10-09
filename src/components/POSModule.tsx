@@ -65,7 +65,14 @@ const BLE_PRINT_SERVICES = [
 export default function POSModule({ navigateTo }: POSModuleProps) {
   // ─── Step 5: Admin Access Gate ───────────────────────────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem('cd_pos_auth') === 'true';
+    try {
+      return (
+        localStorage.getItem('cd_pos_auth') === 'true' ||
+        sessionStorage.getItem('cd_pos_auth') === 'true'
+      );
+    } catch {
+      return false;
+    }
   });
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -78,7 +85,12 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
       loginPassword === ADMIN_CREDENTIALS.password
     ) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('cd_pos_auth', 'true');
+      try {
+        localStorage.setItem('cd_pos_auth', 'true');
+        sessionStorage.setItem('cd_pos_auth', 'true');
+      } catch (err) {
+        console.warn('Storage write failed', err);
+      }
       setLoginError('');
     } else {
       setLoginError('Invalid administrator credentials. Please check your username and password.');
@@ -87,7 +99,12 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('cd_pos_auth');
+    try {
+      localStorage.removeItem('cd_pos_auth');
+      sessionStorage.removeItem('cd_pos_auth');
+    } catch {
+      // ignore
+    }
   };
 
   // ─── Navigation Tabs ─────────────────────────────────────────────────────

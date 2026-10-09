@@ -1,37 +1,27 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  Flame,
-  Soup,
-  Wheat,
-  Grid,
-  Search,
-  ShoppingBag,
-  Plus,
-  Minus,
-  X,
-  MapPin,
-  Phone,
-  Clock,
-  Calendar,
-  Users,
-  MessageSquare,
-  ChevronRight,
-  Sparkles,
-  Info,
-  ArrowRight,
-  ArrowLeft,
-  UtensilsCrossed,
-  Award,
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  Gift,
-  Menu
+import { 
+  MapPin, 
+  Phone, 
+  Clock, 
+  ArrowRight, 
+  ChevronRight, 
+  Sparkles, 
+  CheckCircle2, 
+  Award, 
+  Flame, 
+  X, 
+  Menu, 
+  Users, 
+  PhoneCall, 
+  Calendar, 
+  Utensils, 
+  BookOpen,
+  ZoomIn,
+  MessageCircle
 } from 'lucide-react';
 
-
-import { MenuItem, CartItem, ReservationRequest, OrderDetails } from './types';
+import { MenuItem } from './types';
 import Gallery from './components/Gallery';
 import OnlineOrdering from './components/OnlineOrdering';
 import TableReservation from './components/TableReservation';
@@ -39,17 +29,35 @@ import Celebrations from './components/Celebrations';
 import POSModule from './components/POSModule';
 import { adminStore, AdminSettings } from './lib/adminStore';
 
+const RESTAURANT_PHONES = {
+  primary: '+917061591831',
+  primaryDisplay: '+91 70615 91831',
+  secondary: '+919122421316',
+  secondaryDisplay: '+91 91224 21316',
+  landline: '+919431498112',
+  landlineDisplay: '+91 94314 98112'
+};
+
+const getNormalizedPath = (path: string) => {
+  let clean = (path || '/').split('?')[0].split('#')[0].trim();
+  if (clean.length > 1 && clean.endsWith('/')) {
+    clean = clean.slice(0, -1);
+  }
+  if (clean === '/index.html') return '/';
+  if (clean === '/menu') return '/order';
+  return clean || '/';
+};
+
 export default function App() {
-  // --- Routing State ---
-  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
+  // --- Routing State with robust normalization ---
+  const [currentPath, setCurrentPath] = useState(() => getNormalizedPath(window.location.pathname));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navigateTo = (path: string, callback?: () => void) => {
-    setIsFullMenuSubpageActive(false);
-    window.history.pushState(null, '', path);
-    setCurrentPath(path);
+    const normalized = getNormalizedPath(path);
+    window.history.pushState(null, '', normalized);
+    setCurrentPath(normalized);
     if (callback) {
-      // Small delay to allow React to mount/update components before scrolling
       setTimeout(callback, 150);
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -61,7 +69,6 @@ export default function App() {
       const headerOffset = 85;
       const elementPosition = ref.current.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-      
       window.scrollTo({
         top: offsetPosition,
         behavior: 'smooth'
@@ -75,11 +82,12 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
+      setCurrentPath(getNormalizedPath(window.location.pathname));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
   // --- Dynamic Menu Items & Settings from localStorage-backed adminStore ---
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => adminStore.getMenuItems());
   const [settings, setSettings] = useState<AdminSettings>(() => adminStore.getSettings());
@@ -99,29 +107,19 @@ export default function App() {
     };
   }, []);
 
-  // --- Cart and Checkout State ---
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
-  // Quick 2-field sticky prompt for WhatsApp orders (no full checkout needed)
-  const [cartQuickName, setCartQuickName] = useState('');
-  const [cartQuickArea, setCartQuickArea] = useState('');
-  
-  // Customization modal temporary selections
-  const [customSpice, setCustomSpice] = useState<'mild' | 'medium' | 'hot' | undefined>('medium');
-  const [customQty, setCustomQty] = useState(1);
-  const [customInstructions, setCustomInstructions] = useState('');
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
-  const [thaliCurry, setThaliCurry] = useState<string>('No swap (As per original Chef recipe)');
-  const [thaliBread, setThaliBread] = useState<string>('2 Tandoori Butter Rotis');
-  const [thaliDessert, setThaliDessert] = useState<string>('Gulab Jamun (1pc)');
-  const [thaliExtraRice, setThaliExtraRice] = useState<boolean>(false);
+  // --- Phone Order Modal State ---
+  const [orderCallDish, setOrderCallDish] = useState<MenuItem | null>(null);
+  const [isOrderCallModalOpen, setIsOrderCallModalOpen] = useState(false);
+  const [isMocktailPosterModalOpen, setIsMocktailPosterModalOpen] = useState(false);
+
+  const handleOpenOrderCall = (dish?: MenuItem) => {
+    setOrderCallDish(dish || null);
+    setIsOrderCallModalOpen(true);
+  };
 
   // --- Category and Search State ---
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isFullMenuSubpageActive, setIsFullMenuSubpageActive] = useState(false);
 
   // --- Bestsellers Handpicked ---
   const BESTSELLER_IDS = useMemo(() => [
@@ -137,436 +135,32 @@ export default function App() {
     return menuItems.filter(item => BESTSELLER_IDS.includes(item.id));
   }, [BESTSELLER_IDS, menuItems]);
 
-  // --- Reservation State ---
-  const [reservationStep, setReservationStep] = useState(1);
-  const [reservationData, setReservationData] = useState<ReservationRequest>({
-    fullName: '',
-    phone: '',
-    partySize: 2,
-    date: new Date().toISOString().split('T')[0],
-    timeSlot: '19:30',
-    specialRequests: ''
-  });
-
-  const [orderConfirmation, setOrderConfirmation] = useState<{
-    orderId: string;
-    estimatedTime: string;
-    items: CartItem[];
-    summary: OrderDetails;
-    subtotal: number;
-    discount: number;
-    deliveryFee: number;
-    total: number;
-  } | null>(null);
-
-  // --- Checkout form State ---
-  const [checkoutData, setCheckoutData] = useState<OrderDetails>({
-    fullName: '',
-    phone: '',
-    address: '',
-    deliveryType: 'delivery',
-    paymentMethod: 'cod',
-    specialInstructions: ''
-  });
-
-  // --- Active Tab for Scroll Spy / Quick Navigation ---
-  const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'about' | 'gallery' | 'reservation' | 'contact'>('home');
-
-  // References for sections to scroll to
+  // Section references for in-page navigation
   const homeRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const aboutRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
-  const offersRef = useRef<HTMLDivElement>(null);
   const contactRef = useRef<HTMLDivElement>(null);
-  const reservationRef = useRef<HTMLDivElement>(null);
-
-  // --- Cart computations ---
-  const cartSubtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
-  }, [cart]);
-
-  // Special offer discount calculation (driven by CMS settings)
-  const discountAmount = useMemo(() => {
-    if (!settings.offer?.enabled) return 0;
-    if (cartSubtotal >= settings.offer.minOrder) {
-      return Math.round(cartSubtotal * (settings.offer.discountPercent / 100));
-    }
-    return 0;
-  }, [cartSubtotal, settings.offer]);
-
-  const deliveryFee = useMemo(() => {
-    if (checkoutData.deliveryType === 'pickup' || cart.length === 0) return 0;
-    return cartSubtotal >= (settings.deliveryFeeThreshold || 500) ? 0 : (settings.deliveryFeeAmount || 40);
-  }, [cartSubtotal, checkoutData.deliveryType, cart, settings]);
-
-  const cartCgst = useMemo(() => {
-    if (!settings.gstEnabled || cart.length === 0) return 0;
-    const discountRatio = cartSubtotal > 0 ? (cartSubtotal - discountAmount) / cartSubtotal : 1;
-    let cgst = 0;
-    cart.forEach(item => {
-      const itemGst = item.menuItem.gstRate !== undefined ? item.menuItem.gstRate : (settings.cgstRate + settings.sgstRate);
-      const itemTaxable = (item.menuItem.price * item.quantity) * discountRatio;
-      cgst += itemTaxable * (itemGst / 2) / 100;
-    });
-    return Math.round(cgst);
-  }, [cart, cartSubtotal, discountAmount, settings]);
-
-  const cartSgst = useMemo(() => {
-    if (!settings.gstEnabled || cart.length === 0) return 0;
-    const discountRatio = cartSubtotal > 0 ? (cartSubtotal - discountAmount) / cartSubtotal : 1;
-    let sgst = 0;
-    cart.forEach(item => {
-      const itemGst = item.menuItem.gstRate !== undefined ? item.menuItem.gstRate : (settings.cgstRate + settings.sgstRate);
-      const itemTaxable = (item.menuItem.price * item.quantity) * discountRatio;
-      sgst += itemTaxable * (itemGst / 2) / 100;
-    });
-    return Math.round(sgst);
-  }, [cart, cartSubtotal, discountAmount, settings]);
-
-  const cartTotal = useMemo(() => {
-    const taxable = Math.max(0, cartSubtotal - discountAmount);
-    return Math.max(0, taxable + deliveryFee + cartCgst + cartSgst);
-  }, [cartSubtotal, discountAmount, deliveryFee, cartCgst, cartSgst]);
-
-  const cartItemsCount = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.quantity, 0);
-  }, [cart]);
-
-  // --- Helper to smooth scroll ---
-  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>, tabName: typeof activeTab) => {
-    setActiveTab(tabName);
-    if (tabName === 'menu') {
-      setIsFullMenuSubpageActive(true);
-    } else {
-      setIsFullMenuSubpageActive(false);
-    }
-    setTimeout(() => {
-      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
-  };
 
   const handleCategoryClick = (category: string) => {
     setSelectedCategory(category);
-    setIsFullMenuSubpageActive(true);
-    setTimeout(() => {
-      menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
+    navigateTo('/order');
   };
 
-  // --- Cart Actions ---
-  const handleQuickAdd = (item: MenuItem, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent opening modal
-    
-    setCart(prevCart => {
-      const targetSpice = item.spiceLevel;
-      const existing = prevCart.find(c => c.menuItem.id === item.id && c.selectedSpice === targetSpice);
-      if (existing) {
-        return prevCart.map(c => 
-          c.menuItem.id === item.id && c.selectedSpice === targetSpice
-            ? { ...c, quantity: c.quantity + 1 }
-            : c
-        );
-      }
-      return [...prevCart, { menuItem: item, quantity: 1, selectedSpice: targetSpice, specialInstructions: '' }];
-    });
-  };
-
-  const calculateAddedPrice = (item: MenuItem) => {
-    let added = 0;
-    if (item.category === 'Heritage Thalis') {
-      if (thaliBread.includes('Garlic Naan')) added += 15;
-      if (thaliBread.includes('Laccha Paratha')) added += 10;
-      if (thaliExtraRice) added += 40;
-    } else {
-      selectedAddons.forEach(addonName => {
-        if (addonName.includes('Cheese')) added += 20;
-        if (addonName.includes('Butter')) added += 15;
-        if (addonName.includes('Rice')) added += 50;
-        if (addonName.includes('Garlic Dip')) added += 10;
-      });
-    }
-    return added;
-  };
-
-  const handleOpenCustomizer = (item: MenuItem) => {
-    setCustomizingItem(item);
-    setCustomSpice(item.spiceLevel);
-    setCustomQty(1);
-    setCustomInstructions('');
-    setSelectedAddons([]);
-    setThaliCurry('No swap (As per original Chef recipe)');
-    setThaliBread('2 Tandoori Butter Rotis');
-    setThaliDessert('Gulab Jamun (1pc)');
-    setThaliExtraRice(false);
-  };
-
-  const handleAddCustomized = () => {
-    if (!customizingItem) return;
-
-    const addedPrice = calculateAddedPrice(customizingItem);
-
-    setCart(prevCart => {
-      const existingIndex = prevCart.findIndex(
-        c => c.menuItem.id === customizingItem.id && 
-             c.selectedSpice === customSpice && 
-             c.specialInstructions === customInstructions &&
-             JSON.stringify(c.selectedAddons || []) === JSON.stringify(selectedAddons) &&
-             c.thaliCustomizations?.currySwap === thaliCurry &&
-             c.thaliCustomizations?.breadSwap === thaliBread &&
-             c.thaliCustomizations?.dessertChoice === thaliDessert &&
-             c.thaliCustomizations?.extraRice === thaliExtraRice
-      );
-
-      if (existingIndex > -1) {
-        return prevCart.map((c, idx) => 
-          idx === existingIndex 
-            ? { ...c, quantity: c.quantity + customQty }
-            : c
-        );
-      }
-
-      return [...prevCart, {
-        menuItem: {
-          ...customizingItem,
-          price: customizingItem.price + addedPrice
-        },
-        quantity: customQty,
-        selectedSpice: customSpice,
-        specialInstructions: customInstructions,
-        selectedAddons,
-        thaliCustomizations: customizingItem.category === 'Heritage Thalis' ? {
-          currySwap: thaliCurry,
-          breadSwap: thaliBread,
-          dessertChoice: thaliDessert,
-          extraRice: thaliExtraRice
-        } : undefined,
-        addedPrice
-      }];
-    });
-
-    setCustomizingItem(null);
-    setIsCartOpen(true); // Guide user to their cart
-  };
-
-  const updateCartQty = (idx: number, delta: number) => {
-    setCart(prev => {
-      const item = prev[idx];
-      const newQty = item.quantity + delta;
-      if (newQty <= 0) {
-        return prev.filter((_, i) => i !== idx);
-      }
-      return prev.map((c, i) => i === idx ? { ...c, quantity: newQty } : c);
-    });
-  };
-
-  const removeFromCart = (idx: number) => {
-    setCart(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleReservationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (reservationStep < 3) {
-      setReservationStep(prev => prev + 1);
-    } else {
-      // No database write — reservation goes directly via WhatsApp
-      const message = `Namaste Curry Delight Kahalgaon! I would like to reserve a table:\n\n` +
-        `• *Name:* ${reservationData.fullName}\n` +
-        `• *Phone:* ${reservationData.phone}\n` +
-        `• *Party Size:* ${reservationData.partySize} People\n` +
-        `• *Date:* ${reservationData.date}\n` +
-        `• *Time:* ${reservationData.timeSlot}\n` +
-        (reservationData.specialRequests ? `• *Special Notes:* ${reservationData.specialRequests}\n` : '') +
-        `\nPlease confirm availability. Thank you!`;
-
-      const encodedMessage = encodeURIComponent(message);
-      const waNumber = settings?.whatsappNumber || '917061591831';
-      window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
-      
-      alert("Opening WhatsApp to send reservation details. Thank you for booking with Curry Delight!");
-      setReservationStep(1);
-      setReservationData({
-        fullName: '',
-        phone: '',
-        partySize: 2,
-        date: new Date().toISOString().split('T')[0],
-        timeSlot: '19:30',
-        specialRequests: ''
-      });
-    }
-  };
-
-  // --- Checkout / Order Submission ---
-  const handlePlaceOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!checkoutData.fullName || !checkoutData.phone || (checkoutData.deliveryType === 'delivery' && !checkoutData.address)) {
-      alert('Please fill in all required fields.');
-      return;
-    }
-
-    // Phone number validation (Indian 10-digit)
-    const phoneDigits = checkoutData.phone.replace(/\D/g, '');
-    if (phoneDigits.length !== 10) {
-      alert('Please enter a valid 10-digit mobile number.');
-      return;
-    }
-
-    // Kitchen closed guard
-    if (settings.isKitchenOpen === false) {
-      alert('Sorry, the kitchen is closed right now. Please try again later.');
-      return;
-    }
-
-    // Sold-out check — prices may have changed since items were added to cart
-    const soldOutNow = cart.filter(c => menuItems.find(m => m.id === c.menuItem.id)?.soldOut);
-    if (soldOutNow.length > 0) {
-      alert(`Sorry! The following item(s) just went sold-out:\n${soldOutNow.map(c => c.menuItem.name).join(', ')}\nPlease remove them from your cart before placing the order.`);
-      return;
-    }
-
-    // Price-drift protection — recalculate using latest menu prices
-    const refreshedCart = cart.map(c => {
-      const latestItem = menuItems.find(m => m.id === c.menuItem.id);
-      return latestItem ? { ...c, menuItem: { ...c.menuItem, price: latestItem.price } } : c;
-    });
-    const refreshedSubtotal = refreshedCart.reduce((s, c) => s + c.menuItem.price * c.quantity, 0);
-    if (refreshedSubtotal !== cartSubtotal) {
-      alert(`Prices have been updated since you added items to cart. The total has been refreshed. Please review and confirm.`);
-      setCart(refreshedCart);
-      return;
-    }
-
-    const orderId = `CD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const kitchenBuffer = settings?.kitchenBufferMinutes || 0;
-    const baseMin = checkoutData.deliveryType === 'delivery' ? 45 : 20;
-    const baseMax = checkoutData.deliveryType === 'delivery' ? 55 : 25;
-    const estimatedTime = `${baseMin + kitchenBuffer}-${baseMax + kitchenBuffer} mins`;
-
-    const confirmation = {
-      orderId,
-      estimatedTime,
-      items: [...cart],
-      summary: { ...checkoutData },
-      subtotal: cartSubtotal,
-      discount: discountAmount,
-      deliveryFee,
-      total: cartTotal
-    };
-
-    // No database write — the customer will send order via WhatsApp in the next step.
-    // This is local state only; the confirmation screen shows WhatsApp + Call options.
-    setOrderConfirmation(confirmation);
-    setCart([]);
-    setIsCheckoutOpen(false);
-    setIsCartOpen(false);
-  };
-
-  const handleSendOrderWhatsApp = (conf: typeof orderConfirmation) => {
-    if (!conf) return;
-
-    let itemsText = '';
-    conf.items.forEach((item, idx) => {
-      itemsText += `${idx + 1}. ${item.menuItem.name} x${item.quantity} [${item.selectedSpice || 'medium'}]` +
-        (item.specialInstructions ? ` (Note: ${item.specialInstructions})` : '') + ` - ₹${item.menuItem.price * item.quantity}\n`;
-    });
-
-    const message = `*NEW ORDER - CURRY DELIGHT KAHALGAON*\n` +
-      `----------------------------------------\n` +
-      `*Order ID:* ${conf.orderId}\n` +
-      `*Customer:* ${conf.summary.fullName}\n` +
-      `*Phone:* ${conf.summary.phone}\n` +
-      `*Type:* ${conf.summary.deliveryType === 'delivery' ? '📍 Home Delivery' : '🏪 Self Takeaway'}\n` +
-      (conf.summary.deliveryType === 'delivery' ? `*Address:* ${conf.summary.address}\n` : '') +
-      `*Payment:* ${conf.summary.paymentMethod.toUpperCase()} (on ${conf.summary.deliveryType === 'delivery' ? 'delivery' : 'pickup'})\n` +
-      `----------------------------------------\n` +
-      `*ITEMS ORDERED:*\n${itemsText}` +
-      `----------------------------------------\n` +
-      `*Subtotal:* ₹${conf.subtotal}\n` +
-      (conf.discount > 0 ? `*Discount (${settings.offer?.code || 'PROMO'}):* -₹${conf.discount}\n` : '') +
-      `*Delivery Charge:* ₹${conf.deliveryFee}\n` +
-      `*GRAND TOTAL:* ₹${conf.total}\n` +
-      `----------------------------------------\n` +
-      (conf.summary.specialInstructions ? `*Instructions:* ${conf.summary.specialInstructions}\n` : '') +
-      `Please confirm receipt and initiate cooking!`;
-
-    const encodedMessage = encodeURIComponent(message);
-    const waNumber = settings?.whatsappNumber || '917061591831';
-    window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
-  };
-
-  const handleDirectCartWhatsApp = () => {
-    if (cart.length === 0) return;
-
-    let itemsText = '';
-    cart.forEach((item, idx) => {
-      itemsText += `${idx + 1}. *${item.menuItem.name}* x${item.quantity}` +
-        (item.selectedSpice ? ` [${item.selectedSpice}]` : '') +
-        (item.specialInstructions ? ` (Note: ${item.specialInstructions})` : '') +
-        ` - ₹${item.menuItem.price * item.quantity}\n`;
-    });
-
-    // Build customer details from sticky quick fields first, fallback to full checkout form
-    const name = cartQuickName || checkoutData.fullName;
-    const area = cartQuickArea || checkoutData.address;
-    const customerDetails = name ? (
-      `*Customer:* ${name}\n` +
-      `*Phone:* ${checkoutData.phone || 'To be provided on WhatsApp'}\n` +
-      (area ? `*Delivery Area / Landmark:* ${area}\n` : '') +
-      `*Type:* ${checkoutData.deliveryType === 'delivery' ? '📍 Home Delivery' : '🏪 Self Takeaway'}\n`
-    ) : (area ? `*Delivery Area / Landmark:* ${area}\n` : '');
-
-    const message = `*NEW ORDER - CURRY DELIGHT KAHALGAON*\n` +
-      `----------------------------------------\n` +
-      (customerDetails ? customerDetails + `----------------------------------------\n` : '') +
-      `*ITEMS IN CART:*\n${itemsText}` +
-      `----------------------------------------\n` +
-      `*Subtotal:* ₹${cartSubtotal}\n` +
-      (discountAmount > 0 ? `*Discount (${settings?.offer?.code || 'PROMO'}):* -₹${discountAmount}\n` : '') +
-      `*Delivery Charge:* ₹${deliveryFee}\n` +
-      `*GRAND TOTAL:* ₹${cartTotal}\n` +
-      `----------------------------------------\n` +
-      (checkoutData.specialInstructions ? `*Instructions:* ${checkoutData.specialInstructions}\n` : '') +
-      `Please confirm receipt and initiate cooking!`;
-
-    const encodedMessage = encodeURIComponent(message);
-    const waNumber = settings?.whatsappNumber || '917061591831';
-    window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
-  };
-
-  // --- Scroll Spy for sticky CTA header visibility ---
-  const [showStickyBottomBar, setShowStickyBottomBar] = useState(false);
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 400) {
-        setShowStickyBottomBar(true);
-      } else {
-        setShowStickyBottomBar(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // --- Filtering menu items ---
-  const filteredMenuItems = useMemo(() => {
-    return menuItems.filter(item => {
-      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            item.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [selectedCategory, searchQuery, menuItems]);
-
+  // Early return for POS terminal
   if (currentPath === '/admin' || currentPath === '/pos') {
     return (
-      <div className="min-h-screen bg-cream font-sans text-charcoal">
+      <div className="min-h-screen bg-[#FFF9F2] font-sans text-charcoal">
         <POSModule navigateTo={navigateTo} />
       </div>
     );
   }
 
+  // Determine if on known subpage
+  const isSubpage = currentPath === '/order' || currentPath === '/reserve' || currentPath === '/celebrations';
+
   return (
-    <div className="min-h-screen bg-cream font-sans text-ink selection:bg-saffron selection:text-white">
+    <div className="min-h-screen bg-[#FFF9F2] font-sans text-ink selection:bg-saffron selection:text-white">
       
       {/* Dynamic Flash Announcement Banner (Weather / Festival / Rush Alert) */}
       {settings.announcementBanner?.enabled && (
@@ -596,7 +190,7 @@ export default function App() {
             className="flex items-center space-x-3 text-left group cursor-pointer"
             id="brand-logo"
           >
-            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 bg-black border border-white/10 shadow-sm flex-shrink-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 bg-black border border-white/10 shadow-sm shrink-0">
               <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
             </div>
             <div>
@@ -647,7 +241,7 @@ export default function App() {
                   scrollToRef(galleryRef);
                 }
               }} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
+              className="hover:text-saffron transition-colors cursor-pointer text-[#FFF9F2]/80"
               id="nav-link-gallery"
             >
               Gallery
@@ -660,43 +254,23 @@ export default function App() {
                   scrollToRef(contactRef);
                 }
               }} 
-              className={`hover:text-saffron transition-colors cursor-pointer ${currentPath === '/' ? 'text-saffron' : 'text-[#FFF9F2]/80'}`}
+              className="hover:text-saffron transition-colors cursor-pointer text-[#FFF9F2]/80"
               id="nav-link-contact"
             >
               Contact
             </button>
           </div>
 
-          {/* Action Hub - Cart & Primary CTA */}
+          {/* Action Hub - Direct Phone Call CTA */}
           <div className="flex items-center space-x-3 sm:space-x-4">
-            
-            {/* Cart Trigger Button */}
+            {/* Primary Order Action: Tap to Call */}
             <button 
-              onClick={() => setIsCartOpen(true)}
-              className="relative p-2.5 text-[#FFF9F2] hover:text-saffron transition-all bg-white/5 hover:bg-white/10 rounded-full cursor-pointer focus:outline-none shadow-sm"
-              aria-label="Shopping Cart"
-              id="nav-cart-btn"
+              onClick={() => handleOpenOrderCall()}
+              className="bg-saffron text-white hover:bg-[#d15423] font-bold text-xs md:text-sm px-5 py-2.5 rounded-full transition-all flex items-center space-x-2 cursor-pointer shadow-md focus:outline-none hover:scale-102 active:scale-98"
+              id="nav-call-order-btn"
             >
-              <ShoppingBag className="w-5 h-5" />
-              {cartItemsCount > 0 && (
-                <motion.span 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-1.5 -right-1.5 bg-saffron text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center font-tabular-nums shadow-md"
-                >
-                  {cartItemsCount}
-                </motion.span>
-              )}
-            </button>
-
-            {/* Saffron Filled Primary CTA - Order Now */}
-            <button 
-              onClick={() => navigateTo('/order')}
-              className="hidden sm:flex bg-saffron text-white hover:bg-[#d15423] font-bold text-xs md:text-sm px-6 py-2.5 rounded-full transition-all flex items-center space-x-1.5 cursor-pointer shadow-md focus:outline-none hover:scale-102 active:scale-98"
-              id="nav-order-online-cta"
-            >
-              <span>Order Online</span>
-              <ChevronRight className="w-3.5 h-3.5 hidden sm:inline" />
+              <PhoneCall className="w-4 h-4 animate-pulse" />
+              <span>Call to Order</span>
             </button>
 
             {/* Hamburger Mobile Menu Trigger */}
@@ -708,7 +282,6 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </button>
-
           </div>
         </div>
       </nav>
@@ -717,7 +290,6 @@ export default function App() {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <div className="fixed inset-0 z-50 overflow-hidden lg:hidden" id="mobile-nav-drawer">
-            {/* Backdrop overlay */}
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -726,7 +298,6 @@ export default function App() {
               className="absolute inset-0 bg-charcoal/85 backdrop-blur-xs"
             />
 
-            {/* Drawer Content */}
             <motion.div 
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
@@ -734,7 +305,6 @@ export default function App() {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="absolute top-0 right-0 bottom-0 w-full max-w-[300px] bg-charcoal border-l border-white/10 shadow-2xl flex flex-col justify-between"
             >
-              {/* Header */}
               <div className="p-6 border-b border-white/10 flex items-center justify-between">
                 <span className="font-display font-bold text-lg text-[#FFF9F2] tracking-tight">Navigation</span>
                 <button 
@@ -746,7 +316,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Links */}
               <div className="flex-1 overflow-y-auto py-6 px-6 space-y-6">
                 <nav className="flex flex-col space-y-4">
                   <button 
@@ -754,7 +323,7 @@ export default function App() {
                       setIsMobileMenuOpen(false);
                       navigateTo('/');
                     }} 
-                    className={`text-left text-base font-bold py-2 transition-colors ${currentPath === '/' && !isFullMenuSubpageActive ? 'text-saffron' : 'text-[#FFF9F2]/80 hover:text-saffron'}`}
+                    className={`text-left text-base font-bold py-2 transition-colors ${currentPath === '/' ? 'text-saffron' : 'text-[#FFF9F2]/80 hover:text-saffron'}`}
                     id="mobile-nav-home"
                   >
                     Home
@@ -818,16 +387,27 @@ export default function App() {
                     Contact
                   </button>
                 </nav>
+
+                {/* Direct Call Action Inside Drawer */}
+                <div className="pt-4 border-t border-white/10 space-y-2">
+                  <a 
+                    href={`tel:${RESTAURANT_PHONES.primary}`}
+                    className="w-full bg-saffron hover:bg-[#d15423] text-white py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    <span>Call to Order ({RESTAURANT_PHONES.primaryDisplay})</span>
+                  </a>
+                </div>
               </div>
 
-              {/* Footer / Admin Staff Access */}
+              {/* Staff Portal Link */}
               <div className="p-6 border-t border-white/10 bg-black/10 space-y-4">
                 <button 
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                     navigateTo('/admin');
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-[#FFF9F2] uppercase tracking-wider transition-all"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-[#FFF9F2] uppercase tracking-wider transition-all cursor-pointer"
                 >
                   🔑 Staff Portal
                 </button>
@@ -840,8 +420,9 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* MAIN VIEW CONTENT CONTAINER */}
       <AnimatePresence mode="wait">
-        {currentPath === '/' && (
+        {(!isSubpage || currentPath === '/') && (
           <motion.div
             key="homepage-view"
             initial={{ opacity: 0 }}
@@ -849,546 +430,541 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-            {!isFullMenuSubpageActive && (
-              <>
-                {/* 2. PHOTOGRAPHY-FORWARD HERO (Charcoal Background) */}
-          <section ref={homeRef} className="bg-charcoal text-text-on-dark py-12 px-6 md:py-24 relative overflow-hidden" id="section-hero">
-            
-            {/* Background Atmosphere */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(232,98,44,0.12)_0%,transparent_75%)] pointer-events-none" />
+            {/* 2. PHOTOGRAPHY-FORWARD HERO (Charcoal Background) */}
+            <section ref={homeRef} className="bg-charcoal text-text-on-dark py-12 px-6 md:py-24 relative overflow-hidden" id="section-hero">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(232,98,44,0.12)_0%,transparent_75%)] pointer-events-none" />
 
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
-              
-              {/* Hero Copy (Left side on desktop) */}
-              <div className="lg:col-span-5 text-left space-y-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center space-x-1.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 px-3 py-1 rounded-full text-xs font-bold tracking-wider font-mono">
-                    <span>⭐ 4.6 / 5.0</span>
-                    <span className="text-white/60">·</span>
-                    <span className="text-[#FFF9F2]/90">280+ Google Reviews</span>
-                  </div>
-                  <div className="inline-flex items-center space-x-1 bg-white/10 text-[#FFF9F2]/90 border border-white/15 px-3 py-1 rounded-full text-xs font-medium font-mono">
-                    <MapPin className="w-3 h-3 text-saffron" />
-                    <span>Kahalgaon & NTPC Township</span>
-                  </div>
-                </div>
-                
-                <h1 className="font-display font-bold text-5xl md:text-6xl text-white leading-[1.1] tracking-tight">
-                  Aromatic Heritage <br />
-                  from <span className="text-saffron italic font-normal">Kahalgaon</span>
-                </h1>
-
-                <p className="text-[#FFF9F2]/80 text-lg leading-relaxed max-w-xl font-normal">
-                  Home-style Indian curries, straight off the tandoor — with Chinese, pizza, and everyday favorites for the rest of the table.
-                </p>
-
-                {/* Delivery Radius & Speed Note */}
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-[#FFF9F2]/90 max-w-md">
-                  <div className="bg-saffron/20 p-2.5 rounded-xl text-saffron shrink-0">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <strong className="text-white block font-medium">Delivering across Kahalgaon Town & NTPC Township</strong>
-                    <p className="text-[11px] text-[#FFF9F2]/60 mt-0.5">Hot meals dispatched to your doorstep within 35–45 mins</p>
-                  </div>
-                </div>
-
-                {/* CTA block - strictly visible above fold on mobile as per requirement */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                  {/* PRIMARY --saffron filled CTA */}
-                  <button 
-                    onClick={() => scrollToSection(menuRef, 'menu')}
-                    className="bg-saffron text-white hover:bg-[#d15423] text-center font-bold text-base px-8 py-4 rounded-full transition-transform active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-saffron/20 cursor-pointer focus:outline-none"
-                    id="hero-primary-order-cta"
-                  >
-                    <ShoppingBag className="w-5 h-5" />
-                    <span>Order Online</span>
-                  </button>
-
-                  {/* SECONDARY white outline CTA - Book Table */}
-                  <button 
-                    onClick={() => navigateTo('/reserve')}
-                    className="border border-[#FFF9F2]/30 text-[#FFF9F2] hover:bg-[#FFF9F2]/10 text-center font-bold text-base px-8 py-4 rounded-full transition-colors flex items-center justify-center space-x-1 cursor-pointer focus:outline-none"
-                    id="hero-secondary-reserve-cta"
-                  >
-                    <span>Book a Table</span>
-                  </button>
-                </div>
-
-                {/* Quick trust metrics - completely clean human text, no fake simulated server data */}
-                <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/10 max-w-md">
-                  <div>
-                    <span className="block font-display font-bold text-3xl text-saffron leading-none">180+</span>
-                    <span className="block font-display font-bold text-xs text-saffron uppercase tracking-widest mt-1">Authentic</span>
-                    <span className="text-[10px] text-[#FFF9F2]/50 font-mono tracking-wider uppercase font-bold block mt-1">Menu Items</span>
-                  </div>
-                  <div>
-                    <span className="block font-display font-bold text-3xl text-saffron leading-none">100%</span>
-                    <span className="block font-display font-bold text-xs text-saffron uppercase tracking-widest mt-1">Fresh</span>
-                    <span className="text-[10px] text-[#FFF9F2]/50 font-mono tracking-wider uppercase font-bold block mt-1">Spices Daily</span>
-                  </div>
-                  <div>
-                    <span className="block font-display font-bold text-3xl text-saffron leading-none">Fast &</span>
-                    <span className="block font-display font-bold text-xs text-saffron uppercase tracking-widest mt-1">Hot</span>
-                    <span className="text-[10px] text-[#FFF9F2]/50 font-mono tracking-wider uppercase font-bold block mt-1">Local Delivery</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Hero Restaurant Interior Image */}
-              <div className="lg:col-span-7 mt-8 lg:mt-0">
-                <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/30">
-                  <img 
-                    src="/real_interior_wide.png" 
-                    alt="Curry Delight Restaurant Dining Space in Kahalgaon" 
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/80 via-charcoal/20 to-transparent p-6 pt-24">
-                    <div className="flex items-center space-x-1.5 text-saffron font-bold text-xs uppercase font-mono tracking-wider">
-                      <Award className="w-4 h-4" />
-                      <span>Kahalgaon's Finest Dining</span>
+              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+                {/* Hero Copy */}
+                <div className="lg:col-span-5 text-left space-y-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex items-center space-x-1.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 px-3 py-1 rounded-full text-xs font-bold tracking-wider font-mono">
+                      <span>⭐ 4.6 / 5.0</span>
+                      <span className="text-white/60">·</span>
+                      <span className="text-[#FFF9F2]/90">280+ Google Reviews</span>
                     </div>
-                    <h3 className="text-white font-display font-bold text-xl md:text-2xl mt-1">Our Elegant Warm Dining Room</h3>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          {/* HOMEPAGE CONVERSION PATHS SECTION */}
-          <section className="bg-white py-16 px-6 border-b border-charcoal/5" id="section-conversion-cards">
-            <div className="max-w-7xl mx-auto space-y-10">
-              <div className="text-center max-w-xl mx-auto space-y-1.5">
-                <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">How Can We Serve You?</span>
-                <h2 className="font-display font-bold text-3xl text-charcoal leading-tight">Three Unique Curry Delight Experiences</h2>
-                <p className="text-sm text-charcoal/60 font-normal">Select a dining experience customized specifically to your requirements.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Card 1: Order Online */}
-                <div className="bg-[#FFF9F2] rounded-3xl p-6 md:p-8 border border-charcoal/5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group text-left">
-                  <div className="space-y-4">
-                    <div className="bg-saffron/10 text-saffron p-3.5 rounded-2xl w-fit flex items-center justify-center">
-                      <ShoppingBag className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="font-display font-bold text-xl text-charcoal group-hover:text-saffron transition-colors">Order Online</h3>
-                      <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
-                        Freshly roasted family recipes delivered hot to your doorstep.
-                      </p>
+                    <div className="inline-flex items-center space-x-1 bg-white/10 text-[#FFF9F2]/90 border border-white/15 px-3 py-1 rounded-full text-xs font-medium font-mono">
+                      <MapPin className="w-3 h-3 text-saffron" />
+                      <span>Kahalgaon & NTPC Township</span>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => navigateTo('/order')}
-                    className="mt-6 bg-saffron text-white hover:bg-[#d15423] font-bold text-xs py-3.5 px-6 rounded-full w-full flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-                    id="homepage-card-order-online-btn"
-                  >
-                    <span>Start Order</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                  
+                  <h1 className="font-display font-bold text-5xl md:text-6xl text-white leading-[1.1] tracking-tight">
+                    Aromatic Heritage <br />
+                    from <span className="text-saffron italic font-normal">Kahalgaon</span>
+                  </h1>
 
-                {/* Card 2: Book a Table */}
-                <div className="bg-[#FFF9F2] rounded-3xl p-6 md:p-8 border border-charcoal/5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group text-left">
-                  <div className="space-y-4">
-                    <div className="bg-saffron/10 text-saffron p-3.5 rounded-2xl w-fit flex items-center justify-center">
-                      <Users className="w-6 h-6" />
+                  <p className="text-[#FFF9F2]/80 text-lg leading-relaxed max-w-xl font-normal">
+                    Home-style Indian curries, straight off the tandoor — with Chinese, pizza, and everyday favorites for the rest of the table.
+                  </p>
+
+                  {/* Delivery Radius & Speed Note */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-[#FFF9F2]/90 max-w-md">
+                    <div className="bg-saffron/20 p-2.5 rounded-xl text-saffron shrink-0">
+                      <Clock className="w-4 h-4" />
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="font-display font-bold text-xl text-charcoal group-hover:text-saffron transition-colors">Book a Table</h3>
-                      <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
-                        Instant self-serve reservations for up to 8 guests.
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => navigateTo('/reserve')}
-                    className="mt-6 bg-charcoal text-white hover:bg-charcoal/90 font-bold text-xs py-3.5 px-6 rounded-full w-full flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-                    id="homepage-card-book-table-btn"
-                  >
-                    <span>Find a Table</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Card 3: Host a Celebration */}
-                <div className="bg-[#FFF9F2] rounded-3xl p-6 md:p-8 border border-charcoal/5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group text-left">
-                  <div className="space-y-4">
-                    <div className="bg-saffron/10 text-saffron p-3.5 rounded-2xl w-fit flex items-center justify-center">
-                      <Sparkles className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="font-display font-bold text-xl text-charcoal group-hover:text-saffron transition-colors">Host a Celebration</h3>
-                      <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
-                        Birthdays, anniversaries & corporate banquets curated with love.
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => navigateTo('/celebrations')}
-                    className="mt-6 border border-charcoal/20 hover:bg-charcoal/5 font-bold text-xs py-3.5 px-6 rounded-full w-full flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-                    id="homepage-card-celebrations-btn"
-                  >
-                    <span>Inquire Now</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 3. BROWSE CATEGORIES (Cream Background, high touch targets) */}
-          <section className="bg-cream py-12 px-6 border-b border-charcoal/5" id="section-categories">
-            <div className="max-w-7xl mx-auto">
-              <div className="text-center max-w-xl mx-auto mb-10">
-                <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">Curated Collections</span>
-                <h2 className="font-display font-bold text-3xl text-charcoal mt-1">Explore Our Family Kitchen</h2>
-              </div>
-
-              <div className="flex gap-6 overflow-x-auto pb-4 justify-start scrollbar-hide py-2 px-1">
-                
-                {/* Category: All */}
-                <div 
-                  onClick={() => handleCategoryClick('all')}
-                  className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group"
-                  id="category-btn-all"
-                >
-                  <div className={`w-16 h-16 rounded-full bg-white p-1 shadow-sm transition-all duration-300 ${selectedCategory === 'all' ? 'border-2 border-saffron scale-105 shadow-md' : 'border border-charcoal/10 group-hover:border-charcoal/30'}`}>
-                    <img src="https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&q=80&w=120&h=120" className="w-full h-full rounded-full object-cover" alt="All Dishes" />
-                  </div>
-                  <span className={`text-[11px] font-bold uppercase tracking-wider transition-colors duration-200 ${selectedCategory === 'all' ? 'text-saffron font-extrabold' : 'text-charcoal/60 group-hover:text-charcoal'}`}>
-                    All Dishes
-                  </span>
-                </div>
-
-                {/* Dynamic Categories */}
-                {Array.from(new Set(menuItems.map(item => item.category as string))).map((cat: string) => {
-                  const firstItem = menuItems.find(item => item.category === cat);
-                  const catImg = firstItem ? firstItem.image : 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120';
-                  return (
-                    <div 
-                      key={cat}
-                      onClick={() => handleCategoryClick(cat)}
-                      className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group"
-                      id={`category-btn-${cat.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
-                    >
-                      <div className={`w-16 h-16 rounded-full bg-white p-1 shadow-sm transition-all duration-300 ${selectedCategory === cat ? 'border-2 border-saffron scale-105 shadow-md' : 'border border-charcoal/10 group-hover:border-charcoal/30'}`}>
-                        <img src={catImg} className="w-full h-full rounded-full object-cover" alt={cat} />
-                      </div>
-                      <span className={`text-[11px] font-bold uppercase tracking-wider transition-colors duration-200 ${selectedCategory === cat ? 'text-saffron font-extrabold' : 'text-charcoal/60 group-hover:text-charcoal'}`}>
-                        {cat}
-                      </span>
-                    </div>
-                  );
-                })}
-
-              </div>
-            </div>
-          </section>
-        </>
-      )}
-
-      {/* 4. POPULAR DISHES / MENU ENGINE or FULL MENU SUBPAGE */}
-      <section ref={menuRef} className="bg-cream py-16 px-6" id="section-popular-menu">
-        <div className="max-w-7xl mx-auto">
-          {/* --- HOMEPAGE HIGHLIGHTS VIEW (MAX 6 ITEMS) --- */}
-          <div className="space-y-12">
-            <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 border-b border-charcoal/10">
-              <div className="text-left">
-                <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">Chef's Handpicked Favourites</span>
-                <h2 className="font-display font-bold text-4xl text-charcoal mt-1">Today's Most Ordered</h2>
-                <p className="text-xs text-charcoal/60 mt-1 max-w-xl font-normal">
-                  These 6 signature recipes represent the beating heart of Curry Delight. They get ordered continuously every single day!
-                </p>
-              </div>
-              
-              {/* Secondary navigation action to Full Menu */}
-              <button 
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setSearchQuery('');
-                  navigateTo('/order');
-                }}
-                className="mt-4 md:mt-0 flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-saffron hover:text-[#d15423] transition-colors cursor-pointer"
-                id="browse-all-link-top"
-              >
-                <span>Browse Our Menu (180+ Dishes)</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Grid Layout of Exactly 6 Items */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {bestsellerMenuItems.map((item) => (
-                <motion.div
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => handleOpenCustomizer(item)}
-                  className="bg-white rounded-3xl overflow-hidden border border-charcoal/10 hover:border-saffron/40 hover:shadow-lg transition-all duration-300 group flex flex-col justify-between cursor-pointer focus-within:ring-2 focus-within:ring-saffron"
-                >
-                  <div>
-                    {/* Visual Card Media */}
-                    <div className="relative aspect-[4/3] bg-charcoal/5 overflow-hidden">
-                      <img 
-                        src={item.image} 
-                        alt={item.name} 
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
-                      
-                      {/* Fresh Chef Special tag */}
-                      <div className="absolute bottom-2.5 right-2.5 bg-charcoal/70 backdrop-blur-xs text-[8px] text-white px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold z-10 select-none">
-                        Freshly Prepared
-                      </div>
-
-                      {/* Veg / Non-Veg Overlay */}
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 bg-charcoal/65 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/10 shadow-sm">
-                        <div className={`w-2 h-2 rounded-full ${item.isVeg ? 'bg-green-500' : 'bg-red-500'} border border-white`} />
-                        <span className="text-[9px] font-bold text-white uppercase tracking-wider">{item.isVeg ? 'Veg' : 'Non-Veg'}</span>
-                      </div>
-
-                      {/* Bestseller Badge */}
-                      <div className="absolute top-2.5 left-2.5 bg-saffron text-white text-[10px] font-extrabold px-3 py-1 rounded-full shadow-md flex items-center space-x-1 uppercase tracking-wider font-sans">
-                        <Award className="w-3.5 h-3.5" />
-                        <span>Bestseller</span>
-                      </div>
-                    </div>
-
-                    {/* Card Content details */}
-                    <div className="p-5 space-y-3 text-left">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-charcoal/50 font-bold">
-                          {item.category}
-                        </span>
-
-                        {/* Spice Level shorthand */}
-                        {item.spiceLevel && (
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full font-mono uppercase tracking-wider flex-shrink-0 ${
-                            item.spiceLevel === 'mild' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                            item.spiceLevel === 'medium' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                            'bg-red-50 text-red-700 border border-red-100'
-                          }`}>
-                            🌶️ {item.spiceLevel}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="font-display font-bold text-xl text-charcoal tracking-tight group-hover:text-saffron transition-colors">
-                        {item.name}
-                      </h3>
-
-                      <p className="text-xs text-charcoal/70 line-clamp-2 leading-relaxed">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pricing and Action quick-buy */}
-                  <div className="p-5 pt-0 flex items-center justify-between border-t border-charcoal/5 mt-auto">
                     <div>
-                      <span className="text-[9px] text-charcoal/40 block font-bold uppercase tracking-wider">Price</span>
-                      <span className="font-sans font-extrabold text-xl text-saffron font-tabular-nums">
-                        ₹{item.price}
-                      </span>
+                      <strong className="text-white block font-medium">Delivering across Kahalgaon Town & NTPC Township</strong>
+                      <p className="text-[11px] text-[#FFF9F2]/60 mt-0.5">Dispatched hot to your doorstep within 35–45 mins • Call to Order</p>
                     </div>
+                  </div>
 
-                    {/* Quick Add Button */}
+                  {/* CTA block */}
+                  <div className="flex flex-col sm:flex-row gap-4 pt-2">
                     <button 
-                      onClick={(e) => handleQuickAdd(item, e)}
-                      className="bg-charcoal text-white hover:bg-saffron p-2.5 rounded-full transition-all duration-300 cursor-pointer shadow-sm focus:outline-none hover:scale-105 active:scale-95"
-                      title="Quick Add to Cart"
-                      id={`quick-add-${item.id}`}
+                      onClick={() => handleOpenOrderCall()}
+                      className="bg-saffron text-white hover:bg-[#d15423] text-center font-bold text-base px-8 py-4 rounded-full transition-transform active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-saffron/20 cursor-pointer focus:outline-none"
+                      id="hero-primary-call-cta"
                     >
-                      <Plus className="w-4 h-4" />
+                      <PhoneCall className="w-5 h-5" />
+                      <span>Call to Order Now</span>
+                    </button>
+
+                    <button 
+                      onClick={() => navigateTo('/order')}
+                      className="border border-[#FFF9F2]/30 text-[#FFF9F2] hover:bg-[#FFF9F2]/10 text-center font-bold text-base px-8 py-4 rounded-full transition-colors flex items-center justify-center space-x-1 cursor-pointer focus:outline-none"
+                      id="hero-secondary-menu-cta"
+                    >
+                      <BookOpen className="w-4 h-4 mr-1.5" />
+                      <span>View Menu</span>
                     </button>
                   </div>
-                </motion.div>
-              ))}
-            </div>
 
-            {/* GORGEOUS PROMINENT CTA CARD for Full Master Menu */}
-            <div className="mt-14 bg-gradient-to-br from-charcoal to-[#1a1a1a] rounded-3xl p-8 md:p-12 text-white border border-white/5 relative overflow-hidden shadow-xl text-center md:text-left">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-saffron/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
-                <div className="space-y-3 max-w-2xl text-left">
-                  <span className="text-xs font-mono font-bold text-saffron uppercase tracking-widest block">The Master Kitchen Menu</span>
-                  <h3 className="font-display font-bold text-3xl md:text-4xl text-white tracking-tight">
-                    Craving Something Else?
-                  </h3>
-                  <p className="text-sm text-cream/70 leading-relaxed font-normal">
-                    Discover our entire menu featuring over 150 dishes, including our sizzling appetizers, slow-simmered regional curries, tandoor-baked flatbreads, and handcrafted milkshakes.
+                  {/* Quick trust metrics */}
+                  <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/10 max-w-md">
+                    <div>
+                      <span className="block font-display font-bold text-3xl text-saffron leading-none">180+</span>
+                      <span className="block font-display font-bold text-xs text-saffron uppercase tracking-widest mt-1">Authentic</span>
+                      <span className="text-[10px] text-[#FFF9F2]/50 font-mono tracking-wider uppercase font-bold block mt-1">Menu Items</span>
+                    </div>
+                    <div>
+                      <span className="block font-display font-bold text-3xl text-saffron leading-none">100%</span>
+                      <span className="block font-display font-bold text-xs text-saffron uppercase tracking-widest mt-1">Fresh</span>
+                      <span className="text-[10px] text-[#FFF9F2]/50 font-mono tracking-wider uppercase font-bold block mt-1">Spices Daily</span>
+                    </div>
+                    <div>
+                      <span className="block font-display font-bold text-3xl text-saffron leading-none">Fast &</span>
+                      <span className="block font-display font-bold text-xs text-saffron uppercase tracking-widest mt-1">Hot</span>
+                      <span className="text-[10px] text-[#FFF9F2]/50 font-mono tracking-wider uppercase font-bold block mt-1">Local Delivery</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hero Restaurant Interior Image */}
+                <div className="lg:col-span-7 mt-8 lg:mt-0">
+                  <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/10 aspect-[4/3] group bg-charcoal/30">
+                    <img 
+                      src="/real_interior_wide.png" 
+                      alt="Curry Delight Restaurant Dining Space in Kahalgaon" 
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/80 via-charcoal/20 to-transparent p-6 pt-24">
+                      <div className="flex items-center space-x-1.5 text-saffron font-bold text-xs uppercase font-mono tracking-wider">
+                        <Award className="w-4 h-4" />
+                        <span>Kahalgaon's Finest Dining</span>
+                      </div>
+                      <h3 className="text-white font-display font-bold text-xl md:text-2xl mt-1">Our Elegant Warm Dining Room</h3>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            {/* 3. HOMEPAGE CONVERSION PATHS SECTION */}
+            <section className="bg-white py-16 px-6 border-b border-charcoal/5" id="section-conversion-cards">
+              <div className="max-w-7xl mx-auto space-y-10">
+                <div className="text-center max-w-xl mx-auto space-y-1.5">
+                  <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">How Can We Serve You?</span>
+                  <h2 className="font-display font-bold text-3xl text-charcoal leading-tight">Three Unique Curry Delight Experiences</h2>
+                  <p className="text-sm text-charcoal/60 font-normal">Select a dining experience customized specifically to your requirements.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Card 1: Order via Phone Call */}
+                  <div className="bg-[#FFF9F2] rounded-3xl p-6 md:p-8 border border-charcoal/5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group text-left">
+                    <div className="space-y-4">
+                      <div className="bg-saffron/10 text-saffron p-3.5 rounded-2xl w-fit flex items-center justify-center">
+                        <PhoneCall className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-display font-bold text-xl text-charcoal group-hover:text-saffron transition-colors">Order via Phone Call</h3>
+                        <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
+                          Fast home delivery across Kahalgaon & NTPC Township. Call directly to place your order with our friendly counter team!
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleOpenOrderCall()}
+                      className="mt-6 bg-saffron text-white hover:bg-[#d15423] font-bold text-xs py-3.5 px-6 rounded-full w-full flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                      id="homepage-card-call-order-btn"
+                    >
+                      <PhoneCall className="w-3.5 h-3.5 mr-1" />
+                      <span>Call: {RESTAURANT_PHONES.primaryDisplay}</span>
+                    </button>
+                  </div>
+
+                  {/* Card 2: Book a Table */}
+                  <div className="bg-[#FFF9F2] rounded-3xl p-6 md:p-8 border border-charcoal/5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group text-left">
+                    <div className="space-y-4">
+                      <div className="bg-saffron/10 text-saffron p-3.5 rounded-2xl w-fit flex items-center justify-center">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-display font-bold text-xl text-charcoal group-hover:text-saffron transition-colors">Book a Table</h3>
+                        <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
+                          Instant reservations for families and intimate dining up to 8 guests.
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => navigateTo('/reserve')}
+                      className="mt-6 bg-charcoal text-white hover:bg-charcoal/90 font-bold text-xs py-3.5 px-6 rounded-full w-full flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                      id="homepage-card-book-table-btn"
+                    >
+                      <span>Find a Table</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Card 3: Host a Celebration */}
+                  <div className="bg-[#FFF9F2] rounded-3xl p-6 md:p-8 border border-charcoal/5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group text-left">
+                    <div className="space-y-4">
+                      <div className="bg-saffron/10 text-saffron p-3.5 rounded-2xl w-fit flex items-center justify-center">
+                        <Sparkles className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-display font-bold text-xl text-charcoal group-hover:text-saffron transition-colors">Host a Celebration</h3>
+                        <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
+                          Birthdays, anniversaries & corporate banquets curated with love.
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => navigateTo('/celebrations')}
+                      className="mt-6 border border-charcoal/20 hover:bg-charcoal/5 font-bold text-xs py-3.5 px-6 rounded-full w-full flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                      id="homepage-card-celebrations-btn"
+                    >
+                      <span>Inquire Now</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 4. OCTOBER SPECIAL PROMOTIONAL SPOTLIGHT: 30% OFF MOCKTAILS */}
+            <section className="bg-charcoal text-white py-16 px-6 border-b border-white/10 relative overflow-hidden" id="section-mocktail-special">
+              <div className="max-w-7xl mx-auto">
+                <div className="bg-gradient-to-br from-[#231d18] to-[#161311] rounded-3xl border border-saffron/30 p-8 md:p-12 shadow-2xl relative overflow-hidden">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                    
+                    {/* Poster Image Display */}
+                    <div className="lg:col-span-5 flex justify-center">
+                      <div 
+                        onClick={() => setIsMocktailPosterModalOpen(true)}
+                        className="relative rounded-2xl overflow-hidden shadow-2xl border-2 border-saffron/40 max-w-sm w-full group cursor-pointer bg-black"
+                        title="Click to view full promo poster"
+                      >
+                        <img 
+                          src="/mocktail-special-october.jpg" 
+                          alt="Curry Delight 30% Discount on Mocktails - Virgin Mint Mojito & Blue Lagoon" 
+                          className="w-full h-auto object-cover group-hover:scale-103 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-charcoal/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="bg-saffron text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-full shadow-lg flex items-center gap-1.5">
+                            <ZoomIn className="w-4 h-4" /> Tap to Enlarge Poster
+                          </span>
+                        </div>
+                        <div className="absolute top-3 left-3 bg-red-600 text-white font-extrabold text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
+                          30% OFF
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Promotional Narrative & Call CTA */}
+                    <div className="lg:col-span-7 space-y-6 text-left">
+                      <div className="space-y-2">
+                        <div className="inline-flex items-center space-x-2 bg-saffron/20 text-saffron border border-saffron/30 px-3 py-1 rounded-full text-xs font-bold tracking-wider font-mono uppercase">
+                          <Sparkles className="w-3.5 h-3.5 text-saffron" />
+                          <span>Special Festival Offer • October Month Only</span>
+                        </div>
+                        <h2 className="font-display font-bold text-3xl md:text-5xl text-white tracking-tight leading-tight">
+                          30% Flat Discount <br />
+                          on <span className="text-saffron italic">Crafted Mocktails</span>
+                        </h2>
+                      </div>
+
+                      <p className="text-cream/80 text-base leading-relaxed font-normal">
+                        Beat the heat with our signature refreshing drinks! Prepared with fresh garden mint, zesty lemons, chilled crushed ice, and premium fruit syrups:
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1">
+                          <span className="text-xs font-bold text-emerald-400 font-mono uppercase block">🍃 Signature</span>
+                          <h4 className="font-display font-bold text-lg text-white">Virgin Mint Mojito</h4>
+                          <p className="text-xs text-cream/60">Crisp crushed mint, lemon wedges, and chilled sparkling soda.</p>
+                        </div>
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1">
+                          <span className="text-xs font-bold text-sky-400 font-mono uppercase block">🌊 Cool Waves</span>
+                          <h4 className="font-display font-bold text-lg text-white">Electric Blue Lagoon</h4>
+                          <p className="text-xs text-cream/60">Vibrant citrus curaçao notes shaken with chilled ice and fizz.</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-cream/80 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-saffron shrink-0" />
+                          <span>Shiv Parvati Nagar, Block Road, Near Judge's Colony, Kahalgaon</span>
+                        </div>
+                        <a 
+                          href="https://www.instagram.com/curry.delight_restaurant"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-pink-400 hover:text-pink-300 font-bold flex items-center gap-1.5 transition-colors"
+                        >
+                          <span>📸 Follow @curry.delight_restaurant</span>
+                        </a>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                        <a 
+                          href={`tel:${RESTAURANT_PHONES.primary}`}
+                          className="bg-saffron hover:bg-[#d15423] text-white font-bold text-sm px-8 py-4 rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-saffron/20"
+                        >
+                          <PhoneCall className="w-4 h-4" />
+                          <span>Call {RESTAURANT_PHONES.primaryDisplay} to Order</span>
+                        </a>
+
+                        <button 
+                          onClick={() => {
+                            setSelectedCategory('Mocktails, Shakes & Beverages');
+                            navigateTo('/order');
+                          }}
+                          className="border border-white/20 hover:bg-white/10 text-white font-bold text-sm px-7 py-4 rounded-full transition-colors flex items-center justify-center gap-2"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          <span>View All Drinks</span>
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 5. BROWSE CATEGORIES */}
+            <section className="bg-cream py-12 px-6 border-b border-charcoal/5" id="section-categories">
+              <div className="max-w-7xl mx-auto">
+                <div className="text-center max-w-xl mx-auto mb-10">
+                  <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">Curated Collections</span>
+                  <h2 className="font-display font-bold text-3xl text-charcoal mt-1">Explore Our Family Kitchen</h2>
+                </div>
+
+                <div className="flex gap-6 overflow-x-auto pb-4 justify-start scrollbar-hide py-2 px-1">
+                  
+                  {/* Category: All */}
+                  <div 
+                    onClick={() => handleCategoryClick('all')}
+                    className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group"
+                    id="category-btn-all"
+                  >
+                    <div className="w-16 h-16 rounded-full bg-white p-1 shadow-sm transition-all duration-300 border border-charcoal/10 group-hover:border-charcoal/30">
+                      <img src="https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&q=80&w=120&h=120" className="w-full h-full rounded-full object-cover" alt="All Dishes" />
+                    </div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal/60 group-hover:text-charcoal transition-colors duration-200">
+                      All Dishes
+                    </span>
+                  </div>
+
+                  {/* Dynamic Categories */}
+                  {Array.from(new Set(menuItems.map(item => item.category as string))).map((cat: string) => {
+                    const firstItem = menuItems.find(item => item.category === cat);
+                    const catImg = firstItem ? firstItem.image : 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120';
+                    return (
+                      <div 
+                        key={cat}
+                        onClick={() => handleCategoryClick(cat)}
+                        className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group"
+                        id={`category-btn-${cat.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                      >
+                        <div className="w-16 h-16 rounded-full bg-white p-1 shadow-sm transition-all duration-300 border border-charcoal/10 group-hover:border-charcoal/30">
+                          <img src={catImg} className="w-full h-full rounded-full object-cover" alt={cat} />
+                        </div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal/60 group-hover:text-charcoal transition-colors duration-200">
+                          {cat}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                </div>
+              </div>
+            </section>
+
+            {/* 6. POPULAR DISHES (Chef's Handpicked Favourites) */}
+            <section ref={menuRef} className="bg-cream py-16 px-6" id="section-popular-menu">
+              <div className="max-w-7xl mx-auto space-y-12">
+                <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 border-b border-charcoal/10">
+                  <div className="text-left">
+                    <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">Chef's Handpicked Favourites</span>
+                    <h2 className="font-display font-bold text-4xl text-charcoal mt-1">Today's Most Ordered</h2>
+                    <p className="text-xs text-charcoal/60 mt-1 max-w-xl font-normal">
+                      These 6 signature recipes represent the beating heart of Curry Delight. Call to order for immediate dispatch!
+                    </p>
+                  </div>
+                  
+                  <button 
+                    onClick={() => {
+                      setSelectedCategory('all');
+                      setSearchQuery('');
+                      navigateTo('/order');
+                    }}
+                    className="mt-4 md:mt-0 flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-saffron hover:text-[#d15423] transition-colors cursor-pointer"
+                    id="browse-all-link-top"
+                  >
+                    <span>Browse Master Menu (180+ Dishes)</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Grid Layout of Exactly 6 Items */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {bestsellerMenuItems.map((item) => (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                      onClick={() => handleOpenOrderCall(item)}
+                      className="bg-white rounded-3xl overflow-hidden border border-charcoal/10 hover:border-saffron/40 hover:shadow-lg transition-all duration-300 group flex flex-col justify-between cursor-pointer focus-within:ring-2 focus-within:ring-saffron"
+                    >
+                      <div>
+                        {/* Visual Card Media */}
+                        <div className="relative aspect-[4/3] bg-charcoal/5 overflow-hidden">
+                          <img 
+                            src={item.image} 
+                            alt={item.name} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                          />
+                          
+                          <div className="absolute bottom-2.5 right-2.5 bg-charcoal/70 backdrop-blur-xs text-[8px] text-white px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold z-10 select-none">
+                            Freshly Prepared
+                          </div>
+
+                          {/* Veg / Non-Veg Overlay */}
+                          <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 bg-charcoal/65 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/10 shadow-sm">
+                            <div className={`w-2 h-2 rounded-full ${item.isVeg ? 'bg-green-500' : 'bg-red-500'} border border-white`} />
+                            <span className="text-[9px] font-bold text-white uppercase tracking-wider">{item.isVeg ? 'Veg' : 'Non-Veg'}</span>
+                          </div>
+
+                          {/* Bestseller Badge */}
+                          <div className="absolute top-2.5 left-2.5 bg-saffron text-white text-[10px] font-extrabold px-3 py-1 rounded-full shadow-md flex items-center space-x-1 uppercase tracking-wider font-sans">
+                            <Award className="w-3.5 h-3.5" />
+                            <span>Bestseller</span>
+                          </div>
+                        </div>
+
+                        {/* Card Content details */}
+                        <div className="p-5 space-y-3 text-left">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono uppercase tracking-wider text-charcoal/50 font-bold">
+                              {item.category}
+                            </span>
+
+                            {item.spiceLevel && (
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full font-mono uppercase tracking-wider flex-shrink-0 ${
+                                item.spiceLevel === 'mild' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                item.spiceLevel === 'medium' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                'bg-red-50 text-red-700 border border-red-100'
+                              }`}>
+                                🌶️ {item.spiceLevel}
+                              </span>
+                            )}
+                          </div>
+
+                          <h3 className="font-display font-bold text-xl text-charcoal tracking-tight group-hover:text-saffron transition-colors">
+                            {item.name}
+                          </h3>
+
+                          <p className="text-xs text-charcoal/70 line-clamp-2 leading-relaxed">
+                            {item.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Pricing and Action: Call to Order */}
+                      <div className="p-5 pt-0 flex items-center justify-between border-t border-charcoal/5 mt-auto">
+                        <div>
+                          <span className="text-[9px] text-charcoal/40 block font-bold uppercase tracking-wider">Price</span>
+                          <span className="font-sans font-extrabold text-xl text-saffron font-tabular-nums">
+                            ₹{item.price}
+                          </span>
+                        </div>
+
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenOrderCall(item);
+                          }}
+                          className="bg-saffron text-white hover:bg-[#d15423] px-4 py-2 rounded-full font-bold text-xs transition-all duration-300 cursor-pointer shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95"
+                          title={`Call to order ${item.name}`}
+                          id={`call-order-${item.id}`}
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" />
+                          <span>Order</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Master Menu Promo Banner */}
+                <div className="mt-14 bg-gradient-to-br from-charcoal to-[#1a1a1a] rounded-3xl p-8 md:p-12 text-white border border-white/5 relative overflow-hidden shadow-xl text-center md:text-left">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-saffron/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
+                    <div className="space-y-3 max-w-2xl text-left">
+                      <span className="text-xs font-mono font-bold text-saffron uppercase tracking-widest block">The Master Kitchen Menu</span>
+                      <h3 className="font-display font-bold text-3xl md:text-4xl text-white tracking-tight">
+                        Craving Something Else?
+                      </h3>
+                      <p className="text-sm text-cream/70 leading-relaxed font-normal">
+                        Discover our entire menu featuring over 180 dishes, including sizzling appetizers, slow-simmered regional curries, tandoor flatbreads, Chinese gravies, and handcrafted milkshakes.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setSelectedCategory('all');
+                        setSearchQuery('');
+                        navigateTo('/order');
+                      }}
+                      className="bg-saffron hover:bg-[#d15423] text-white font-bold text-sm px-8 py-4 rounded-full transition-all flex items-center space-x-2 cursor-pointer shadow-md hover:scale-102 active:scale-98 whitespace-nowrap"
+                      id="cta-explore-full-menu"
+                    >
+                      <span>Browse Master Menu (180+ Items)</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            {/* 7. ABOUT / ROOTS SECTION */}
+            <section ref={aboutRef} className="bg-cream py-20 px-6 border-b border-charcoal/10" id="section-our-roots">
+              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+                <div className="lg:col-span-6">
+                  <div className="relative rounded-3xl overflow-hidden aspect-[3/4] max-h-[550px] w-full shadow-lg border border-charcoal/5 group bg-charcoal/5">
+                    <img 
+                      src="/real_interior_2.png" 
+                      alt="Curry Delight Restaurant Authentic Seating in Kahalgaon" 
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
+                    />
+                  </div>
+                </div>
+
+                <div className="lg:col-span-6 text-left space-y-6">
+                  <div>
+                    <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">Our Roots & Heritage</span>
+                    <h2 className="font-display font-bold text-4xl text-charcoal mt-1">From Our Clay Tandoor to Your Dining Table</h2>
+                  </div>
+
+                  <p className="text-sm text-charcoal/80 leading-relaxed font-normal">
+                    Curry Delight was born with a single mission: to bring honest, authentic North Indian, Mughlai, and Tandoori culinary magic to the families of Kahalgaon and NTPC Township.
                   </p>
+
+                  <p className="text-sm text-charcoal/80 leading-relaxed font-normal">
+                    Every dish is prepared using fresh ground whole spices, unadulterated dairy, and centuries-old slow cooking techniques. Whether you dine in our tranquil air-conditioned restaurant or call for hot doorstep delivery, you taste the genuine spirit of Indian hospitality.
+                  </p>
+
+                  <div className="pt-2">
+                    <button 
+                      onClick={() => navigateTo('/reserve')}
+                      className="bg-charcoal text-white hover:bg-black font-bold text-xs py-3.5 px-7 rounded-full inline-flex items-center gap-2 transition-all cursor-pointer shadow-md"
+                    >
+                      <span>Reserve Your Table</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <button 
-                  onClick={() => {
-                    setSelectedCategory('all');
-                    setSearchQuery('');
-                    navigateTo('/order');
-                  }}
-                  className="bg-saffron hover:bg-[#d15423] text-white font-bold text-sm px-8 py-4 rounded-full transition-all flex items-center space-x-2 cursor-pointer shadow-md hover:scale-102 active:scale-98 whitespace-nowrap"
-                  id="cta-explore-full-menu"
-                >
-                  <span>Browse Our Menu (180+ Items)</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            </section>
 
-      {!isFullMenuSubpageActive && (
-        <>
-          {/* 6. COHESIVE ROOT: ABOUT / ROOTS SECTION (Cream background, photo forward) */}
-      <section ref={aboutRef} className="bg-cream py-20 px-6 border-b border-charcoal/10" id="section-our-roots">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
-          
-          {/* Single portrait image */}
-          <div className="lg:col-span-6">
-            <div className="relative rounded-3xl overflow-hidden aspect-[3/4] max-h-[550px] w-full shadow-lg border border-charcoal/5 group bg-charcoal/5">
-              <img 
-                src="/real_interior_2.png" 
-                alt="Curry Delight Restaurant Authentic Seating in Kahalgaon" 
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-700 ease-out"
-              />
-            </div>
-          </div>
-
-          {/* Text narrative */}
-          <div className="lg:col-span-6 text-left space-y-6">
-            <div>
-              <span className="text-xs font-bold text-saffron tracking-wider uppercase font-mono">Our Roots & Heritage</span>
-              <h2 className="font-display font-bold text-4xl text-charcoal mt-1">From Our Clay Tandoor to Your Dining Table</h2>
+            {/* 8. GALLERY COMPONENT */}
+            <div ref={galleryRef}>
+              <Gallery />
             </div>
 
-            <p className="text-sm md:text-base text-charcoal/80 leading-relaxed font-normal">
-              Walk into our kitchen and it smells the way a real Indian kitchen should - cumin blooming in hot oil, garlic and ginger going in first, spices ground fresh, not poured from a packet.
-            </p>
+          </motion.div>
+        )}
 
-            <p className="text-sm md:text-base text-charcoal/80 leading-relaxed font-normal">
-              Our food follow recipes that started in the family kitchen long before they reached a restaurant plate - the same dal, the same gravies, made the same way at home.
-            </p>
-
-            <p className="text-sm md:text-base text-charcoal/80 leading-relaxed font-normal">
-              Every curry is made to order, slow enough to build real flavor, never rushed just to turn a table. That's the whole idea - food that tastes like it was made for you, not assembled for a menu.
-            </p>
-
-            <p className="text-sm md:text-base text-charcoal/80 leading-relaxed font-normal">
-              And because every family's cravings don't stop at curry, we've built out the rest of the menu too - tandoori kebabs, Chinese-style noodles and gravies, wood-fired pizza, rolls, shakes, and more. One table, everyone fed.
-            </p>
-
-            <div className="pt-2 flex items-center space-x-6">
-              <div className="flex items-center space-x-2">
-                <div className="bg-saffron/10 p-2.5 rounded-full text-saffron">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <span className="text-xs font-bold text-charcoal uppercase tracking-wider font-mono">Hygienic Kitchen</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="bg-saffron/10 p-2.5 rounded-full text-saffron">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <span className="text-xs font-bold text-charcoal uppercase tracking-wider font-mono">Local Deliveries</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* 7. GALLERY SECTION */}
-      <Gallery galleryRef={galleryRef} images={[
-        { url: '/real_interior_1.png', title: 'Comfortable Premium Dining', category: 'Interior' },
-        { url: '/real_interior_2.png', title: 'Festive Table Settings', category: 'Interior' },
-        { url: '/real_interior_wide.png', title: 'Warm Family Environment', category: 'Interior' },
-        { url: '/real_counter.jpg', title: 'Fresh Drinks & Counter Bar', category: 'Drinks' },
-        { url: '/real_reception.png', title: 'Welcome Reception Counter', category: 'Reception' }
-      ]} />
-
-      {/* 7.5 REAL CUSTOMER REVIEWS & LOCAL SOCIAL PROOF */}
-      <section className="bg-white py-16 px-6 border-b border-charcoal/5" id="section-customer-reviews">
-        <div className="max-w-7xl mx-auto space-y-10">
-          <div className="text-center max-w-xl mx-auto space-y-2">
-            <div className="inline-flex items-center space-x-1.5 bg-amber-100 text-amber-900 border border-amber-200 px-3.5 py-1 rounded-full text-xs font-bold font-mono">
-              <span>⭐ 4.6 / 5.0 Google Reviews</span>
-            </div>
-            <h2 className="font-display font-bold text-3xl md:text-4xl text-charcoal">Loved by Kahalgaon Diners</h2>
-            <p className="text-sm text-charcoal/60 font-normal">
-              From NTPC engineers to family dinner regulars, hear what our guests have to say.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#FFF9F2] p-6 md:p-8 rounded-3xl border border-charcoal/5 shadow-xs space-y-4 flex flex-col justify-between text-left">
-              <div className="space-y-3">
-                <div className="flex text-amber-500 text-sm">⭐⭐⭐⭐⭐</div>
-                <p className="text-sm text-charcoal/80 italic leading-relaxed">
-                  "The Handi Biryani and Paneer Butter Masala are unmatched in Kahalgaon. Always delivered piping hot to NTPC Colony within 40 minutes."
-                </p>
-              </div>
-              <div className="pt-4 border-t border-charcoal/10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-saffron/15 text-saffron font-bold flex items-center justify-center text-sm font-mono">
-                  AS
-                </div>
-                <div>
-                  <h4 className="font-display font-bold text-sm text-charcoal">Abhinav Sharma</h4>
-                  <span className="text-[11px] text-charcoal/50 font-mono">NTPC Township, Kahalgaon</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#FFF9F2] p-6 md:p-8 rounded-3xl border border-charcoal/5 shadow-xs space-y-4 flex flex-col justify-between text-left">
-              <div className="space-y-3">
-                <div className="flex text-amber-500 text-sm">⭐⭐⭐⭐⭐</div>
-                <p className="text-sm text-charcoal/80 italic leading-relaxed">
-                  "Their Royal Veg Thali is hands down the best value lunch. Fresh tandoori rotis, rich dal makhani, and the Gulab Jamun melts in your mouth."
-                </p>
-              </div>
-              <div className="pt-4 border-t border-charcoal/10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-saffron/15 text-saffron font-bold flex items-center justify-center text-sm font-mono">
-                  PK
-                </div>
-                <div>
-                  <h4 className="font-display font-bold text-sm text-charcoal">Priya Kumari</h4>
-                  <span className="text-[11px] text-charcoal/50 font-mono">College Road, Kahalgaon</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#FFF9F2] p-6 md:p-8 rounded-3xl border border-charcoal/5 shadow-xs space-y-4 flex flex-col justify-between text-left">
-              <div className="space-y-3">
-                <div className="flex text-amber-500 text-sm">⭐⭐⭐⭐⭐</div>
-                <p className="text-sm text-charcoal/80 italic leading-relaxed">
-                  "We hosted my daughter's birthday dinner here. The ambiance is warm, air conditioning is comfortable, and the staff treats you like family."
-                </p>
-              </div>
-              <div className="pt-4 border-t border-charcoal/10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-saffron/15 text-saffron font-bold flex items-center justify-center text-sm font-mono">
-                  RV
-                </div>
-                <div>
-                  <h4 className="font-display font-bold text-sm text-charcoal">Rajesh Verma</h4>
-                  <span className="text-[11px] text-charcoal/50 font-mono">Block Road, Kahalgaon</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-
-            </>
-          )}
-        </motion.div>
-      )}
-
+        {/* SUBPAGE: DIGITAL MENU & PHONE ORDER */}
         {currentPath === '/order' && (
           <motion.div
             key="order-view"
@@ -1398,16 +974,15 @@ export default function App() {
             transition={{ duration: 0.15 }}
           >
             <OnlineOrdering 
-              cart={cart}
-              setCart={setCart}
-              onOpenCustomizer={handleOpenCustomizer}
               navigateTo={navigateTo}
               selectedCategory={selectedCategory}
               setSelectedCategory={setSelectedCategory}
+              onCallToOrder={handleOpenOrderCall}
             />
           </motion.div>
         )}
 
+        {/* SUBPAGE: TABLE RESERVATION */}
         {currentPath === '/reserve' && (
           <motion.div
             key="reserve-view"
@@ -1420,6 +995,7 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* SUBPAGE: CELEBRATIONS */}
         {currentPath === '/celebrations' && (
           <motion.div
             key="celebrations-view"
@@ -1433,153 +1009,123 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 8. FOOTER SECTION (Charcoal Background) */}
+      {/* 9. FOOTER SECTION (Charcoal Background) */}
       <footer ref={contactRef} className="bg-charcoal text-text-on-dark pt-16 pb-20 px-6 border-t border-white/5 relative z-10" id="section-footer">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           
           {/* Col 1: About wordmark */}
           <div className="space-y-4 text-left">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-black flex items-center justify-center border border-white/10 shadow-sm flex-shrink-0">
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-black border border-white/10 shrink-0">
                 <img src="/favicon.png" className="w-full h-full object-cover" alt="Curry Delight Logo" />
               </div>
-              <span className="font-display font-bold text-2xl text-white block">Curry Delight</span>
+              <span className="font-display font-bold text-2xl text-[#FFF9F2] tracking-tight">Curry Delight</span>
             </div>
-            <p className="text-cream/70 text-xs leading-relaxed max-w-xs font-normal">
-              Proudly family-owned and serving real, freshly roasted food recipes in Kahalgaon, Bihar. Experience the warm, true comfort of home-cooked Indian culinary excellence.
+            <p className="text-xs text-[#FFF9F2]/70 leading-relaxed font-normal">
+              Kahalgaon's favorite destination for authentic North Indian curries, fresh clay-tandoor flatbreads, sizzlers, Chinese & pizzas.
             </p>
-            <div className="pt-2 text-[10px] text-cream/45 font-mono tracking-wider uppercase font-semibold">
-              A delight in every bite
+            <div className="pt-2 text-xs font-mono text-saffron font-bold">
+              Shiv Parvati Nagar, Block Road, Kahalgaon, Bihar 813203
             </div>
           </div>
 
-          {/* Col 2: Business details */}
+          {/* Col 2: Quick Links */}
           <div className="space-y-4 text-left">
-            <span className="text-[11px] text-saffron font-bold uppercase tracking-widest font-mono block">Our Location</span>
-            
-            <div className="space-y-3.5 text-xs text-cream/85">
-              <div className="flex items-start space-x-2.5">
-                <MapPin className="w-4 h-4 text-saffron mt-0.5 flex-shrink-0" />
-                <span className="leading-relaxed">Shiv Parvati Nagar, Block Rd, Kahalgaon, Bihar 813214</span>
-              </div>
-              <div className="flex items-center space-x-2.5">
-                <Phone className="w-4 h-4 text-saffron flex-shrink-0" />
-                <span>+91 70615 91831 (Local Orders)</span>
-              </div>
-              <div className="flex items-center space-x-2.5">
-                <Clock className="w-4 h-4 text-saffron flex-shrink-0" />
-                <span>Open Daily: 11:30 AM — 10:30 PM</span>
-              </div>
-            </div>
+            <h4 className="font-display font-bold text-base text-[#FFF9F2] uppercase tracking-wider text-xs font-mono">
+              Quick Navigation
+            </h4>
+            <ul className="space-y-2 text-xs text-[#FFF9F2]/75 font-normal">
+              <li><button onClick={() => navigateTo('/')} className="hover:text-saffron transition-colors cursor-pointer">Home</button></li>
+              <li><button onClick={() => navigateTo('/order')} className="hover:text-saffron transition-colors cursor-pointer">Digital Master Menu</button></li>
+              <li><button onClick={() => navigateTo('/reserve')} className="hover:text-saffron transition-colors cursor-pointer">Book a Dining Table</button></li>
+              <li><button onClick={() => navigateTo('/celebrations')} className="hover:text-saffron transition-colors cursor-pointer">Host Celebrations & Parties</button></li>
+              <li><button onClick={() => navigateTo('/admin')} className="hover:text-saffron transition-colors cursor-pointer">Staff & POS Terminal</button></li>
+            </ul>
           </div>
 
-          {/* Col 3: Small Map Embed */}
+          {/* Col 3: Direct Phone Ordering */}
           <div className="space-y-4 text-left">
-            <span className="text-[11px] text-saffron font-bold uppercase tracking-widest font-mono block">Find Us On Map</span>
-            <div className="w-full h-32 rounded-2xl overflow-hidden border border-white/10 shadow-md relative group bg-white/5 flex items-center justify-center">
-              <iframe 
-                title="Curry Delight Map"
-                src="https://maps.google.com/maps?q=Shiv%20Parvati%20Nagar,%20Block%20Rd,%20Kahalgaon,%20Bihar&t=&z=15&ie=UTF8&iwloc=&output=embed" 
-                className="w-full h-full border-0"
-                allowFullScreen={false} 
-                loading="lazy"
-              />
-              <a 
-                href="https://maps.app.goo.gl/fnexsa97XmRvpCwj8" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="absolute inset-0 cursor-pointer"
-                aria-label="View on Google Maps"
-              />
+            <h4 className="font-display font-bold text-base text-[#FFF9F2] uppercase tracking-wider text-xs font-mono">
+              Call to Order
+            </h4>
+            <div className="space-y-3 text-xs text-[#FFF9F2]/75">
+              <div className="flex items-center gap-2">
+                <PhoneCall className="w-4 h-4 text-saffron shrink-0" />
+                <a href={`tel:${RESTAURANT_PHONES.primary}`} className="text-white font-bold hover:text-saffron transition-colors">
+                  {RESTAURANT_PHONES.primaryDisplay} (Counter)
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-saffron shrink-0" />
+                <a href={`tel:${RESTAURANT_PHONES.secondary}`} className="text-white/90 hover:text-saffron transition-colors">
+                  {RESTAURANT_PHONES.secondaryDisplay} (Kitchen)
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-white/50 shrink-0" />
+                <a href={`tel:${RESTAURANT_PHONES.landline}`} className="text-white/80 hover:text-saffron transition-colors">
+                  {RESTAURANT_PHONES.landlineDisplay}
+                </a>
+              </div>
+              <p className="text-[11px] text-cream/50 pt-1">
+                Fast home delivery across Kahalgaon & NTPC Township within 35–45 minutes.
+              </p>
             </div>
-            <a 
-              href="https://maps.app.goo.gl/fnexsa97XmRvpCwj8" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-[10px] text-saffron hover:underline font-bold block"
-            >
-              📍 Open in Google Maps ↗
-            </a>
           </div>
 
-          {/* Col 4: Action Buttons */}
-          <div className="space-y-4 text-left flex flex-col justify-start">
-            <span className="text-[11px] text-saffron font-bold uppercase tracking-widest font-mono block">Our Experiences</span>
-            
-            <div className="space-y-3 pt-1">
-              <button 
-                onClick={() => navigateTo('/order')}
-                className="w-full text-center bg-saffron text-white hover:bg-[#d15423] font-bold text-xs py-3.5 px-4 rounded-full shadow-md transition-colors cursor-pointer focus:outline-none"
-                id="footer-order-cta"
-              >
-                Our Full Menu
-              </button>
-              
-              <button 
-                onClick={() => navigateTo('/reserve')}
-                className="w-full text-center border border-white/20 hover:border-white hover:bg-white/5 text-white font-semibold text-xs py-3.5 px-4 rounded-full transition-colors cursor-pointer focus:outline-none"
-                id="footer-reserve-cta"
-              >
-                Reserve a Table
-              </button>
-
-              <button 
-                onClick={() => navigateTo('/celebrations')}
-                className="w-full text-center border border-white/20 hover:border-white hover:bg-white/5 text-white font-semibold text-xs py-3.5 px-4 rounded-full transition-colors cursor-pointer focus:outline-none"
-                id="footer-celebrations-cta"
-              >
-                Host a Celebration
-              </button>
-
-              <button 
-                onClick={() => {
-                  if (currentPath !== '/') {
-                    navigateTo('/', () => scrollToRef(galleryRef));
-                  } else {
-                    scrollToRef(galleryRef);
-                  }
-                }} 
-                className="w-full text-center border border-white/20 hover:border-white hover:bg-white/5 text-white font-semibold text-xs py-3.5 px-4 rounded-full transition-colors cursor-pointer focus:outline-none"
-                id="footer-gallery-cta"
-              >
-                View Gallery
-              </button>
+          {/* Col 4: Timings & Social */}
+          <div className="space-y-4 text-left">
+            <h4 className="font-display font-bold text-base text-[#FFF9F2] uppercase tracking-wider text-xs font-mono">
+              Operating Hours
+            </h4>
+            <div className="space-y-2 text-xs text-[#FFF9F2]/75">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-saffron shrink-0" />
+                <span>Mon – Sun: 11:30 AM – 10:30 PM</span>
+              </div>
+              <p className="text-[11px] text-emerald-400 font-bold">
+                ✓ Open 7 Days a Week for Dining & Delivery
+              </p>
+              <div className="pt-2">
+                <a 
+                  href="https://www.instagram.com/curry.delight_restaurant" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+                >
+                  <span>📸 @curry.delight_restaurant</span>
+                </a>
+              </div>
             </div>
           </div>
 
         </div>
 
-        {/* Outer credit lines */}
-        <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-[11px] text-cream/40">
+        {/* Bottom credits */}
+        <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#FFF9F2]/50 gap-4">
           <p>© {new Date().getFullYear()} Curry Delight Kahalgaon. All rights reserved.</p>
-          <div className="flex space-x-4 mt-4 sm:mt-0 font-medium font-mono items-center">
+          <div className="flex items-center space-x-4">
             <button 
               onClick={() => navigateTo('/admin')} 
-              className="hover:text-saffron transition-colors font-bold tracking-wider uppercase cursor-pointer"
-              title="Internal Staff Control & Live Order Queue"
+              className="text-white/60 hover:text-saffron transition-colors cursor-pointer"
             >
               🔑 Staff Portal
             </button>
             <span>•</span>
-            <span className="hover:text-cream/65 cursor-help" title="Local heritage curation">Bihar Culinary Pride</span>
-            <span>•</span>
-            <a href="https://www.aaravworld.tech/" target="_blank" rel="noopener noreferrer" className="hover:text-saffron transition-colors font-bold tracking-wider" title="Aarav World Tech">
-              BUILT BY AARAV WORLD
-            </a>
+            <span>Bihar Culinary Pride</span>
           </div>
         </div>
       </footer>
 
-
-      {/* 9. STICKY MOBILE BOTTOM BAR (Required for reachability within one tap on phone) */}
-      <div className="fixed bottom-0 inset-x-0 bg-charcoal border-t border-white/10 py-3 px-2 z-35 flex items-center justify-around lg:hidden shadow-2xl">
+      {/* 10. STICKY MOBILE BOTTOM BAR */}
+      <div className="fixed bottom-0 inset-x-0 bg-charcoal border-t border-white/10 py-2.5 px-3 z-35 flex items-center justify-around lg:hidden shadow-2xl">
         <button 
           onClick={() => navigateTo('/order')}
           className={`flex flex-col items-center space-y-1 text-center cursor-pointer focus:outline-none transition-colors ${currentPath === '/order' ? 'text-saffron' : 'text-cream/70 hover:text-white'}`}
-          id="mobile-bottom-order-btn"
+          id="mobile-bottom-menu-btn"
         >
-          <ShoppingBag className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Order Online</span>
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Menu</span>
         </button>
 
         <button 
@@ -1597,894 +1143,183 @@ export default function App() {
           id="mobile-bottom-celebrations-btn"
         >
           <Sparkles className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Celebrations</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">Events</span>
         </button>
+
+        <a 
+          href={`tel:${RESTAURANT_PHONES.primary}`}
+          className="flex items-center gap-1.5 bg-saffron text-white py-2 px-3.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-[#d15423] transition-all"
+          id="mobile-bottom-call-btn"
+        >
+          <PhoneCall className="w-3.5 h-3.5 animate-pulse" />
+          <span>Call to Order</span>
+        </a>
       </div>
 
-      {/* FLOATING CART BUTTON FOR MOBILE (Shows when there are items in the cart) */}
-      {cartItemsCount > 0 && (
-        <button 
-          onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-20 right-5 bg-saffron text-white rounded-full p-4 shadow-xl z-35 flex items-center justify-center cursor-pointer focus:outline-none border border-white/10 hover:scale-105 transition-transform"
-          id="mobile-floating-cart-btn"
-        >
-          <div className="relative">
-            <ShoppingBag className="w-6 h-6" />
-            <span className="absolute -top-2.5 -right-2.5 bg-white text-saffron text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center font-tabular-nums border border-saffron shadow-xs">
-              {cartItemsCount}
-            </span>
-          </div>
-        </button>
-      )}
-
-      {/* FLOATING CALL TO ORDER BUTTON FOR MOBILE */}
-      <a 
-        href="tel:+917061591831"
-        className="fixed bottom-20 left-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full p-4 shadow-xl z-35 flex items-center justify-center cursor-pointer focus:outline-none border border-white/10 hover:scale-105 transition-transform lg:hidden animate-pulse"
-        id="mobile-floating-call-btn"
-        title="Call to Order"
-      >
-        <Phone className="w-6 h-6" />
-      </a>
-
-      {/* --- CART SLIDE-IN PANEL --- */}
+      {/* --- DIRECT PHONE ORDER MODAL --- */}
       <AnimatePresence>
-        {isCartOpen && (
-          <>
-            {/* Backdrop */}
+        {isOrderCallModalOpen && (
+          <div className="fixed inset-0 z-55 overflow-y-auto bg-charcoal/75 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsCartOpen(false)}
-              className="fixed inset-0 bg-charcoal z-50 cursor-pointer"
-            />
-
-            {/* Panel */}
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.25 }}
-              className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white z-50 shadow-2xl flex flex-col justify-between"
-              id="cart-slide-panel"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl p-6 md:p-8 text-left space-y-6 relative border border-charcoal/10"
+              id="order-call-modal"
             >
-              {/* Header */}
-              <div className="bg-charcoal text-text-on-dark p-5 flex items-center justify-between">
-                <div className="flex items-center space-x-2.5 text-left">
-                  <ShoppingBag className="w-5 h-5 text-saffron" />
-                  <span className="font-display font-semibold text-lg text-white">Your Selection</span>
-                  <span className="bg-white/10 text-white/80 text-xs px-2 py-0.5 rounded-full font-bold font-tabular-nums">
-                    {cartItemsCount}
-                  </span>
-                </div>
-                <button 
-                  onClick={() => setIsCartOpen(false)}
-                  className="p-1 hover:text-saffron transition-colors cursor-pointer text-cream/70 focus:outline-none"
-                  aria-label="Close Cart"
-                  id="close-cart-btn"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Scrollable Body (Items + Summary + Checkout) */}
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-charcoal/10">
-                
-                <div className="p-5 space-y-6">
-                  {/* Status/Discount Banner */}
-                  {cart.length > 0 && settings.offer?.enabled && (
-                    cartSubtotal >= settings.offer.minOrder ? (
-                      <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 p-4 rounded-2xl flex items-start space-x-3">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <span className="text-xs font-bold uppercase tracking-wider block font-mono">{settings.offer.code} Applied!</span>
-                          <span className="text-xs font-normal text-emerald-800/95 mt-0.5 block">Congrats! You've unlocked {settings.offer.discountPercent}% OFF on your Kahalgaon order.</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-2xl flex items-start space-x-3">
-                        <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <span className="text-xs font-bold uppercase tracking-wider block font-mono">Unlock Savings</span>
-                          <span className="text-xs font-normal text-amber-800/95 mt-0.5 block">Add ₹{settings.offer.minOrder - cartSubtotal} more to receive {settings.offer.discountPercent}% off with code {settings.offer.code}.</span>
-                        </div>
-                      </div>
-                    )
-                  )}
-
-                  {cart.length === 0 ? (
-                    <div className="text-center py-20 space-y-4">
-                      <ShoppingBag className="w-16 h-16 text-charcoal/15 mx-auto" />
-                      <h3 className="font-display font-semibold text-lg text-charcoal">Your cart is empty</h3>
-                      <p className="text-xs text-charcoal/50 max-w-xs mx-auto">
-                        Explore our rich family recipe menu, tap quick add, or customize your spice preferences.
-                      </p>
-                      <button 
-                        onClick={() => { setIsCartOpen(false); scrollToSection(menuRef, 'menu'); }}
-                        className="bg-saffron text-white hover:bg-[#d15423] font-bold text-xs px-6 py-3 rounded-full cursor-pointer shadow-md"
-                      >
-                        Browse Our Menu
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4 text-left">
-                      {cart.map((item, idx) => (
-                        <div key={`${item.menuItem.id}-${idx}`} className="flex items-start justify-between p-4 bg-cream/35 border border-charcoal/5 rounded-2xl space-x-4">
-                          <div className="w-16 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-charcoal/5 relative shadow-inner">
-                            <img src={item.menuItem.image} alt={item.menuItem.name} className="w-full h-full object-cover" />
-                          </div>
-                          
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <h4 className="text-xs font-bold text-charcoal truncate">{item.menuItem.name}</h4>
-                            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-charcoal/55">
-                              {item.selectedSpice && (
-                                <span className="font-semibold uppercase font-mono bg-charcoal/5 px-1.5 py-0.5 rounded text-[9px]">
-                                  🌶️ {item.selectedSpice === 'hot' ? 'Bihari Spicy' : item.selectedSpice === 'medium' ? 'Medium' : 'Mild'}
-                                </span>
-                              )}
-                              {item.specialInstructions && <span className="italic truncate max-w-[120px]">"{item.specialInstructions}"</span>}
-                            </div>
-
-                            {/* Thali selections list */}
-                            {item.thaliCustomizations && (
-                              <div className="text-[9px] text-charcoal/70 bg-saffron/5 p-2 rounded-xl space-y-0.5 border border-saffron/10 mt-1">
-                                <div className="font-bold text-saffron uppercase tracking-wider text-[8px] font-mono">Thali Customisations:</div>
-                                <div>• Curry: <span className="font-semibold text-charcoal">{item.thaliCustomizations.currySwap}</span></div>
-                                <div>• Bread: <span className="font-semibold text-charcoal">{item.thaliCustomizations.breadSwap}</span></div>
-                                <div>• Sweet: <span className="font-semibold text-charcoal">{item.thaliCustomizations.dessertChoice}</span></div>
-                                {item.thaliCustomizations.extraRice && <div className="text-saffron font-semibold">• Extra Rice added</div>}
-                              </div>
-                            )}
-
-                            {/* Addons selection list */}
-                            {item.selectedAddons && item.selectedAddons.length > 0 && (
-                              <div className="text-[9px] text-charcoal/70 bg-charcoal/5 p-2 rounded-xl space-y-0.5 mt-1">
-                                <div className="font-bold text-charcoal/60 uppercase tracking-wider text-[8px] font-mono">Add-ons:</div>
-                                {item.selectedAddons.map((addon, aIdx) => (
-                                  <div key={aIdx}>• <span className="font-semibold text-charcoal">{addon}</span></div>
-                                ))}
-                              </div>
-                            )}
-                            
-                            {/* Qty Steppers */}
-                            <div className="flex items-center space-x-2 pt-1.5">
-                              <button 
-                                onClick={() => updateCartQty(idx, -1)}
-                                className="p-1.5 bg-white rounded-lg border border-charcoal/10 hover:bg-charcoal/5 cursor-pointer shadow-xs"
-                              >
-                                <Minus className="w-2.5 h-2.5" />
-                              </button>
-                              <span className="text-xs font-bold font-tabular-nums w-5 text-center">{item.quantity}</span>
-                              <button 
-                                onClick={() => updateCartQty(idx, 1)}
-                                className="p-1.5 bg-white rounded-lg border border-charcoal/10 hover:bg-charcoal/5 cursor-pointer shadow-xs"
-                              >
-                                <Plus className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="text-right flex flex-col justify-between items-end h-full">
-                            <button 
-                              onClick={() => removeFromCart(idx)}
-                              className="text-charcoal/40 hover:text-red-500 p-0.5 cursor-pointer focus:outline-none transition-colors"
-                              aria-label="Delete item"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="text-xs font-bold text-saffron font-tabular-nums block mt-2">
-                              ₹{item.menuItem.price * item.quantity}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer Summary / Checkout action (Now inside scrollable area) */}
-                {cart.length > 0 && (
-                  <div className="border-t border-charcoal/10 p-6 bg-cream/30 space-y-6 text-left">
-                    
-                    {/* Summary math */}
-                    <div className="space-y-3 text-xs">
-                      <div className="flex justify-between items-center text-charcoal/75">
-                        <span>Subtotal</span>
-                        <span className="font-bold font-tabular-nums">₹{cartSubtotal}</span>
-                      </div>
-                      {discountAmount > 0 && (
-                        <div className="flex justify-between items-center text-emerald-700 font-bold">
-                          <span>{settings?.offer?.code || 'PROMO'} Offer ({settings?.offer?.discountPercent || 15}% OFF)</span>
-                          <span className="font-bold font-tabular-nums">-₹{discountAmount}</span>
-                        </div>
-                      )}
-                       <div className="flex justify-between items-center text-charcoal/75">
-                        <span>Delivery Fee</span>
-                        <span className="font-bold font-tabular-nums">{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span>
-                      </div>
-                      {settings.gstEnabled && (
-                        <>
-                          <div className="flex justify-between items-center text-charcoal/75 font-mono text-[11px]">
-                            <span>CGST</span>
-                            <span className="font-bold font-tabular-nums">₹{cartCgst}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-charcoal/75 font-mono text-[11px]">
-                            <span>SGST</span>
-                            <span className="font-bold font-tabular-nums">₹{cartSgst}</span>
-                          </div>
-                        </>
-                      )}
-                      <div className="flex justify-between items-center text-base font-bold text-charcoal pt-4 border-t border-charcoal/10">
-                        <span>Grand Total</span>
-                        <span className="text-saffron font-tabular-nums text-xl">₹{cartTotal}</span>
-                      </div>
-                    </div>
-
-                    {/* Direct Cart Order Buttons: WhatsApp & Phone Call */}
-                    {!isCheckoutOpen ? (
-                      <div className="space-y-3 pt-2">
-                        {/* 2-Field Sticky Quick Prompt */}
-                        <div className="bg-cream/80 p-3.5 rounded-2xl border border-charcoal/10 space-y-2 text-left">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-charcoal/70 font-mono flex items-center gap-1.5">
-                              <span>📍 Quick 1-Tap Delivery Info</span>
-                            </span>
-                            <span className="text-[9px] text-charcoal/40 font-mono">Optional</span>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <div>
-                              <input
-                                type="text"
-                                placeholder="Your Name (e.g. Rahul)"
-                                value={cartQuickName}
-                                onChange={(e) => setCartQuickName(e.target.value)}
-                                className="w-full bg-white border border-charcoal/15 rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-saffron"
-                                id="cart-quick-name-input"
-                              />
-                            </div>
-                            <div>
-                              <input
-                                type="text"
-                                placeholder="Area (e.g. NTPC Colony / Block Rd)"
-                                value={cartQuickArea}
-                                onChange={(e) => setCartQuickArea(e.target.value)}
-                                className="w-full bg-white border border-charcoal/15 rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-saffron"
-                                id="cart-quick-area-input"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <button 
-                          onClick={handleDirectCartWhatsApp}
-                          className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-base py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-lg cursor-pointer transition-all duration-150 hover:scale-101"
-                          id="cart-whatsapp-direct-btn"
-                        >
-                          <MessageSquare className="w-5 h-5 fill-white text-[#25D366]" />
-                          <span>Order via WhatsApp (₹{cartTotal})</span>
-                        </button>
-
-                        <a 
-                          href={`tel:${settings?.contactPhone || '+917061591831'}`}
-                          className="w-full min-h-[44px] bg-saffron hover:bg-[#d05220] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all duration-150 text-center"
-                          id="cart-call-direct-btn"
-                        >
-                          <Phone className="w-4 h-4" />
-                          <span>Call to Order ({settings?.contactPhone || '+91 70615 91831'})</span>
-                        </a>
-
-                        <button 
-                          onClick={() => setIsCheckoutOpen(true)}
-                          className="w-full min-h-[44px] bg-charcoal/5 hover:bg-charcoal/10 text-charcoal font-bold text-xs py-3 rounded-full flex items-center justify-center space-x-1.5 cursor-pointer transition-all duration-150"
-                          id="cart-checkout-toggle-btn"
-                        >
-                          <span>Add Delivery Address & Details</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-5 pt-4 border-t border-charcoal/10">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-display font-bold text-sm text-charcoal uppercase tracking-wider">Delivery Details</h3>
-                          <button 
-                            onClick={() => setIsCheckoutOpen(false)}
-                            className="text-xs font-bold text-saffron hover:underline cursor-pointer"
-                          >
-                            Back to Items
-                          </button>
-                        </div>
-
-                        <form onSubmit={handlePlaceOrder} className="space-y-5">
-                          
-                          {/* Toggle delivery vs pickup */}
-                          <div className="grid grid-cols-2 gap-2 bg-charcoal/5 p-1 rounded-2xl">
-                            <button
-                              type="button"
-                              onClick={() => setCheckoutData({ ...checkoutData, deliveryType: 'delivery' })}
-                              className={`py-2.5 text-xs font-bold rounded-xl cursor-pointer transition-all ${checkoutData.deliveryType === 'delivery' ? 'bg-white text-charcoal shadow-sm' : 'text-charcoal/60'}`}
-                            >
-                              📍 Home Delivery
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCheckoutData({ ...checkoutData, deliveryType: 'pickup' })}
-                              className={`py-2.5 text-xs font-bold rounded-xl cursor-pointer transition-all ${checkoutData.deliveryType === 'pickup' ? 'bg-white text-charcoal shadow-sm' : 'text-charcoal/60'}`}
-                            >
-                              🏪 Self Takeaway
-                            </button>
-                          </div>
-
-                          {/* Live Estimated Time Display */}
-                          <div className="bg-saffron/10 border border-saffron/30 rounded-2xl p-4 flex items-start space-x-3">
-                            <Clock className="w-5 h-5 text-saffron shrink-0 mt-0.5 animate-pulse" />
-                            <div>
-                              <p className="text-xs font-bold text-charcoal">
-                                Live Preparation/Delivery ETA: {' '}
-                                <span className="text-saffron">
-                                  {checkoutData.deliveryType === 'delivery' 
-                                    ? `${45 + (settings?.kitchenBufferMinutes || 0)}-${55 + (settings?.kitchenBufferMinutes || 0)}` 
-                                    : `${20 + (settings?.kitchenBufferMinutes || 0)}-${25 + (settings?.kitchenBufferMinutes || 0)}`
-                                  } mins
-                                </span>
-                              </p>
-                              {settings && settings.kitchenBufferMinutes > 0 && (
-                                <p className="text-[10px] text-charcoal/70 mt-1 flex items-center gap-1 font-mono">
-                                  ⚠️ +{settings.kitchenBufferMinutes}m rush hour delay added by chef
-                                </p>
-                              )}
-                              {(!settings || settings.kitchenBufferMinutes === 0) && (
-                                <p className="text-[10px] text-charcoal/50 mt-1 font-mono">
-                                  ⚡ Kitchen is prep-ready. Zero delay.
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 block ml-1">Full Name</label>
-                            <input 
-                              type="text"
-                              required
-                              placeholder="e.g. Aarav Kumar"
-                              value={checkoutData.fullName}
-                              onChange={(e) => setCheckoutData({ ...checkoutData, fullName: e.target.value })}
-                              className="w-full border border-charcoal/20 rounded-2xl px-5 py-3.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white font-sans transition-all"
-                              id="checkout-name-input"
-                            />
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 block ml-1">Mobile Phone Number</label>
-                            <input 
-                              type="tel"
-                              required
-                              placeholder="e.g. +91 70615 91831"
-                              value={checkoutData.phone}
-                              onChange={(e) => setCheckoutData({ ...checkoutData, phone: e.target.value })}
-                              className="w-full border border-charcoal/20 rounded-2xl px-5 py-3.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white font-sans transition-all"
-                              id="checkout-phone-input"
-                            />
-                          </div>
-
-                          {checkoutData.deliveryType === 'delivery' && (
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 block ml-1">Home Address in Kahalgaon</label>
-                              <input 
-                                type="text"
-                                required
-                                placeholder="e.g. Quarter No. B-45, NTPC Colony, Kahalgaon"
-                                value={checkoutData.address}
-                                onChange={(e) => setCheckoutData({ ...checkoutData, address: e.target.value })}
-                                className="w-full border border-charcoal/20 rounded-2xl px-5 py-3.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white font-sans transition-all"
-                                id="checkout-address-input"
-                              />
-                            </div>
-                          )}
-
-                          {/* Payment Selection */}
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 block ml-1">Payment Method</label>
-                            <div className="grid grid-cols-2 gap-3">
-                              <label className={`border-2 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1 cursor-pointer text-[11px] transition-all ${checkoutData.paymentMethod === 'cod' ? 'border-saffron bg-saffron/5 font-bold text-saffron shadow-sm' : 'border-charcoal/10 text-charcoal/70 bg-white hover:border-charcoal/20'}`}>
-                                <input 
-                                  type="radio" 
-                                  name="payment" 
-                                  checked={checkoutData.paymentMethod === 'cod'}
-                                  onChange={() => setCheckoutData({ ...checkoutData, paymentMethod: 'cod' })}
-                                  className="accent-saffron h-4 w-4"
-                                />
-                                <span className="pt-1">Cash on {checkoutData.deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}</span>
-                              </label>
-                              
-                              <label className={`border-2 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1 cursor-pointer text-[11px] transition-all ${checkoutData.paymentMethod === 'upi' ? 'border-saffron bg-saffron/5 font-bold text-saffron shadow-sm' : 'border-charcoal/10 text-charcoal/70 bg-white hover:border-charcoal/20'}`}>
-                                <input 
-                                  type="radio" 
-                                  name="payment" 
-                                  checked={checkoutData.paymentMethod === 'upi'}
-                                  onChange={() => setCheckoutData({ ...checkoutData, paymentMethod: 'upi' })}
-                                  className="accent-saffron h-4 w-4"
-                                />
-                                <span className="pt-1">Pay with UPI</span>
-                              </label>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-charcoal/60 block ml-1">Special Instructions (Optional)</label>
-                            <input 
-                              type="text"
-                              placeholder="e.g. ring bell, please deliver before 8 PM..."
-                              value={checkoutData.specialInstructions}
-                              onChange={(e) => setCheckoutData({ ...checkoutData, specialInstructions: e.target.value })}
-                              className="w-full border border-charcoal/20 rounded-2xl px-5 py-3.5 text-xs focus:outline-none focus:ring-2 focus:ring-saffron/20 bg-white font-sans transition-all"
-                              id="checkout-instructions-input"
-                            />
-                          </div>
-
-                          {/* Order Placement Triggers: WhatsApp & Call */}
-                          <div className="space-y-3 mt-6">
-                            <button 
-                              type="submit"
-                              className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-base py-4 rounded-full flex items-center justify-center space-x-2 shadow-lg cursor-pointer transition-all duration-150 hover:scale-101"
-                              id="place-order-submit-btn"
-                            >
-                              <MessageSquare className="w-5 h-5 fill-white text-[#25D366]" />
-                              <span>Confirm & Send via WhatsApp (₹{cartTotal})</span>
-                            </button>
-
-                            <a 
-                              href={`tel:${settings?.contactPhone || '+917061591831'}`}
-                              className="w-full min-h-[44px] bg-saffron hover:bg-[#d05220] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all duration-150 text-center"
-                              id="checkout-call-order-btn"
-                            >
-                              <Phone className="w-4 h-4" />
-                              <span>Call to Order ({settings?.contactPhone || '+91 70615 91831'})</span>
-                            </a>
-                          </div>
-
-                        </form>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-
-      {/* --- MENU ITEM CUSTOMIZATION MODAL --- */}
-      <AnimatePresence>
-        {customizingItem && (
-          <>
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setCustomizingItem(null)}
-              className="fixed inset-0 bg-charcoal z-55 cursor-pointer"
-            />
-
-            {/* Modal */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-x-4 bottom-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:max-w-xl w-full max-h-[90vh] md:w-full bg-white z-55 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-left border border-charcoal/10"
-              id="customizer-modal"
-            >
-              
-              {/* Typography Modal Header (No Images) */}
-              <div className="bg-charcoal text-[#FFF9F2] p-5 flex items-center justify-between border-b border-white/10">
+              {/* Header with Close */}
+              <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className={`w-3.5 h-3.5 border-2 flex items-center justify-center p-0.5 rounded-xs ${customizingItem.isVeg ? 'border-green-400' : 'border-red-400'}`}>
-                    <div className={`w-2 h-2 rounded-full ${customizingItem.isVeg ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <div className="w-12 h-12 rounded-2xl bg-saffron/10 border border-saffron/20 flex items-center justify-center text-saffron shrink-0">
+                    <PhoneCall className="w-6 h-6 animate-pulse" />
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-saffron font-bold block">{customizingItem.category}</span>
-                    <h3 className="font-display font-bold text-lg text-white leading-tight">{customizingItem.name}</h3>
+                    <h3 className="font-display font-bold text-2xl text-charcoal">Order via Direct Call</h3>
+                    <p className="text-xs text-charcoal/60">Curry Delight Counter & Kitchen Terminal</p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => setCustomizingItem(null)}
-                  className="bg-white/10 text-white hover:bg-saffron p-2 rounded-full cursor-pointer focus:outline-none transition-colors duration-150"
-                  aria-label="Close"
-                  id="close-customizer-btn"
+                  onClick={() => setIsOrderCallModalOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-charcoal/5 text-charcoal/60 hover:text-charcoal cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Details & options scrollable body */}
-              <div className="p-6 overflow-y-auto space-y-6">
-                
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${customizingItem.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-charcoal/60 font-bold">
-                      {customizingItem.isVeg ? 'Vegetarian Heritage' : 'Non-Vegetarian'}
-                    </span>
-                  </div>
-                  <h3 className="font-display font-bold text-2xl text-charcoal tracking-tight">
-                    {customizingItem.name}
-                  </h3>
-                  <p className="text-xs md:text-sm text-charcoal/70 leading-relaxed font-normal">
-                    {customizingItem.description}
-                  </p>
-                </div>
-
-                {/* Option selection: Spice level */}
-                {customizingItem.spiceLevel !== undefined && (
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold uppercase tracking-wider text-charcoal/60 block">Specify Heat/Spice Level</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {(['mild', 'medium', 'hot'] as const).map((level) => (
-                        <button
-                          key={level}
-                          type="button"
-                          onClick={() => setCustomSpice(level)}
-                          className={`border rounded-xl p-3 text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center space-y-1 ${
-                            customSpice === level 
-                              ? 'border-saffron bg-saffron/5 text-saffron' 
-                              : 'border-charcoal/10 text-charcoal/70 hover:bg-charcoal/5'
-                          }`}
-                        >
-                          <span className="text-base">
-                            {level === 'mild' ? '🌶️' : level === 'medium' ? '🌶️🌶️' : '🌶️🌶️🌶️'}
-                          </span>
-                          <span>
-                            {level === 'mild' ? 'Mild' : level === 'medium' ? 'Medium' : 'Bihari Spicy'}
-                          </span>
-                        </button>
-                      ))}
+              {/* Selected dish details card if opened from specific dish */}
+              {orderCallDish && (
+                <div className="bg-cream/40 rounded-2xl p-4 border border-charcoal/10 flex items-center gap-4">
+                  {orderCallDish.image && (
+                    <img 
+                      src={orderCallDish.image} 
+                      alt={orderCallDish.name} 
+                      className="w-14 h-14 rounded-xl object-cover shrink-0 border border-charcoal/10"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2.5 h-2.5 rounded-full ${orderCallDish.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                      <span className="text-[10px] font-mono uppercase font-bold text-charcoal/50">{orderCallDish.category}</span>
                     </div>
-                  </div>
-                )}
-
-                {/* --- HERITAGE THALI CUSTOMIZER --- */}
-                {customizingItem.category === 'Heritage Thalis' && (
-                  <div className="space-y-4 border-t border-charcoal/5 pt-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-charcoal/60 block">Customise Your Thali Platter</span>
-                    
-                    {/* 1. Swap Curry Option */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-charcoal flex justify-between">
-                        <span>Swap Main Curry:</span>
-                        <span className="text-emerald-600 font-bold text-[10px] uppercase font-mono">Free Swap</span>
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          'No swap (Original recipe)',
-                          'Swap Paneer to Mix Veg',
-                          'Swap Paneer to Dum Aloo',
-                          'Swap Dal Makhani to Dal Fry',
-                          'Swap Chicken to Fish Curry',
-                          'Swap Paneer to Mushroom Masala'
-                        ].filter(opt => {
-                          if (customizingItem.id === 'thali-royal-veg' && opt.includes('Chicken')) return false;
-                          if (customizingItem.id === 'thali-dehati-nonveg' && (opt.includes('Paneer to Mix Veg') || opt.includes('Paneer to Dum Aloo') || opt.includes('Paneer to Mushroom'))) return false;
-                          return true;
-                        }).map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setThaliCurry(opt)}
-                            className={`border text-[11px] p-2.5 rounded-xl text-left transition-all leading-snug ${
-                              thaliCurry === opt 
-                                ? 'border-saffron bg-saffron/5 text-saffron font-bold' 
-                                : 'border-charcoal/10 text-charcoal/70 hover:bg-charcoal/5'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 2. Swap Bread Option */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-charcoal flex justify-between">
-                        <span>Tandoori Bread Selection:</span>
-                        <span className="text-emerald-600 font-bold text-[10px] uppercase font-mono">Select One</span>
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          '2 Tandoori Butter Rotis',
-                          '2 Plain Rotis',
-                          '1 Butter Naan',
-                          '1 Garlic Naan (+₹15)',
-                          '1 Laccha Paratha (+₹10)'
-                        ].map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setThaliBread(opt)}
-                            className={`border text-[11px] p-2.5 rounded-xl text-left transition-all leading-snug ${
-                              thaliBread === opt 
-                                ? 'border-saffron bg-saffron/5 text-saffron font-bold' 
-                                : 'border-charcoal/10 text-charcoal/70 hover:bg-charcoal/5'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 3. Dessert Selection */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-charcoal flex justify-between">
-                        <span>Select Sweet Treat:</span>
-                        <span className="text-emerald-600 font-bold text-[10px] uppercase font-mono">Included</span>
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['Gulab Jamun (1pc)', 'Rasgulla (1pc)', 'Vanilla Cup'].map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setThaliDessert(opt)}
-                            className={`border text-[11px] p-2 rounded-xl text-center transition-all leading-snug ${
-                              thaliDessert === opt 
-                                ? 'border-saffron bg-saffron/5 text-saffron font-bold' 
-                                : 'border-charcoal/10 text-charcoal/70 hover:bg-charcoal/5'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 4. Add Extra Rice Upgrade */}
-                    <div className="flex items-center justify-between bg-cream/30 p-3 rounded-2xl border border-charcoal/5">
-                      <div className="text-left pr-2">
-                        <span className="text-xs font-bold text-charcoal block">Extra Basmati Rice portion</span>
-                        <span className="text-[10px] text-charcoal/50 leading-none">Add double portion of premium long-grain rice</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setThaliExtraRice(!thaliExtraRice)}
-                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                          thaliExtraRice 
-                            ? 'bg-saffron text-white shadow-xs' 
-                            : 'bg-white text-charcoal/60 border border-charcoal/15'
-                        }`}
-                      >
-                        {thaliExtraRice ? 'Added (+₹40)' : 'Add +₹40'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* --- NON-THALI ADDONS --- */}
-                {customizingItem.category !== 'Heritage Thalis' && 
-                 customizingItem.category !== 'Mocktails, Shakes & Beverages' && 
-                 customizingItem.category !== 'Desserts & Accompaniments' && (
-                  <div className="space-y-3 border-t border-charcoal/5 pt-4">
-                    <label className="text-xs font-bold uppercase tracking-wider text-charcoal/60 block">Add-ons & Extra Upgrades</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { name: 'Extra Amul Cheese', price: 20 },
-                        { name: 'Extra Cooking Butter', price: 15 },
-                        { name: 'Extra Rice portion', price: 50 },
-                        { name: 'Chef Special Garlic Dip', price: 10 },
-                        { name: 'Mint Chutney & Salad', price: 0 }
-                      ].filter(addon => {
-                        if (customizingItem.category.includes('Breads') && addon.name.includes('Rice')) return false;
-                        return true;
-                      }).map((addon) => {
-                        const isSelected = selectedAddons.includes(addon.name);
-                        return (
-                          <button
-                            key={addon.name}
-                            type="button"
-                            onClick={() => {
-                              setSelectedAddons(prev => 
-                                prev.includes(addon.name) 
-                                  ? prev.filter(a => a !== addon.name) 
-                                  : [...prev, addon.name]
-                              );
-                            }}
-                            className={`border text-[11px] p-2.5 rounded-xl text-left transition-all flex items-center justify-between leading-snug ${
-                              isSelected 
-                                ? 'border-saffron bg-saffron/5 text-saffron font-bold' 
-                                : 'border-charcoal/10 text-charcoal/70 hover:bg-charcoal/5'
-                            }`}
-                          >
-                            <span>{addon.name}</span>
-                            <span className="text-[10px] text-saffron font-bold">{addon.price > 0 ? `+₹${addon.price}` : 'FREE'}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Instructions */}
-                <div className="space-y-2.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-charcoal/60 block">Kitchen Instructions (Optional)</label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. make it extra creamy, extra green chutney, no butter on naan..."
-                    value={customInstructions}
-                    onChange={(e) => setCustomInstructions(e.target.value)}
-                    className="w-full border border-charcoal/20 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-1 focus:ring-saffron bg-cream/10 font-sans"
-                    id="customizer-notes-input"
-                  />
-                </div>
-
-                {/* Quantity selection */}
-                <div className="flex items-center justify-between pt-2">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-charcoal/60 block">Quantity</label>
-                    <div className="flex items-center space-x-3.5 mt-2 bg-charcoal/5 p-1 rounded-xl w-32 justify-between">
-                      <button 
-                        onClick={() => setCustomQty(prev => Math.max(1, prev - 1))}
-                        className="p-1.5 bg-white rounded-lg shadow-xs hover:bg-charcoal/5 cursor-pointer text-charcoal"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-sm font-bold font-tabular-nums">{customQty}</span>
-                      <button 
-                        onClick={() => setCustomQty(prev => prev + 1)}
-                        className="p-1.5 bg-white rounded-lg shadow-xs hover:bg-charcoal/5 cursor-pointer text-charcoal"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <span className="text-[10px] text-charcoal/50 block font-sans">Total Price</span>
-                    <span className="font-display font-bold text-2xl text-saffron font-tabular-nums">
-                      ₹{(customizingItem.price + calculateAddedPrice(customizingItem)) * customQty}
-                    </span>
+                    <h4 className="font-display font-bold text-base text-charcoal truncate">{orderCallDish.name}</h4>
+                    <span className="text-sm font-extrabold text-saffron font-tabular-nums">₹{orderCallDish.price}</span>
                   </div>
                 </div>
+              )}
 
+              {/* Direct Tap-To-Call Action Buttons */}
+              <div className="space-y-3">
+                <a 
+                  href={`tel:${RESTAURANT_PHONES.primary}`}
+                  className="w-full bg-saffron hover:bg-[#d15423] text-white font-bold text-sm py-4 px-6 rounded-2xl flex items-center justify-between shadow-md transition-all hover:scale-101 active:scale-99"
+                  id="modal-call-primary-btn"
+                >
+                  <div className="flex items-center gap-3">
+                    <PhoneCall className="w-5 h-5" />
+                    <div className="text-left">
+                      <span className="block text-xs uppercase font-mono tracking-wider text-white/80">Primary Counter Line</span>
+                      <strong className="text-base font-sans">{RESTAURANT_PHONES.primaryDisplay}</strong>
+                    </div>
+                  </div>
+                  <span className="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-mono uppercase">
+                    Tap to Call
+                  </span>
+                </a>
+
+                <a 
+                  href={`tel:${RESTAURANT_PHONES.secondary}`}
+                  className="w-full bg-charcoal hover:bg-black text-white font-bold text-sm py-4 px-6 rounded-2xl flex items-center justify-between shadow-md transition-all hover:scale-101 active:scale-99"
+                  id="modal-call-secondary-btn"
+                >
+                  <div className="flex items-center gap-3">
+                    <Phone className="w-5 h-5 text-saffron" />
+                    <div className="text-left">
+                      <span className="block text-xs uppercase font-mono tracking-wider text-white/80">Alternate Kitchen Line</span>
+                      <strong className="text-base font-sans">{RESTAURANT_PHONES.secondaryDisplay}</strong>
+                    </div>
+                  </div>
+                  <span className="bg-white/10 text-white text-xs px-3 py-1 rounded-full font-mono uppercase">
+                    Tap to Call
+                  </span>
+                </a>
               </div>
 
-              {/* CTA slide-panel buttons */}
-              <div className="border-t border-charcoal/10 p-5 bg-cream/15 flex gap-3">
-                <button 
-                  onClick={() => setCustomizingItem(null)}
-                  className="flex-1 text-center border border-charcoal/20 hover:border-charcoal text-charcoal font-bold text-xs py-3.5 rounded-full cursor-pointer transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleAddCustomized}
-                  className="flex-1 text-center bg-saffron hover:bg-[#d15423] text-white font-bold text-xs py-3.5 rounded-full cursor-pointer focus:outline-none transition-colors"
-                  id="confirm-customized-add-btn"
-                >
-                  Add {customQty} Item(s)
-                </button>
+              {/* Delivery Highlights Info */}
+              <div className="bg-[#FFF9F2] rounded-2xl p-4 border border-charcoal/5 space-y-2 text-xs text-charcoal/80">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span><strong>Free Delivery:</strong> On all orders above ₹500</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-saffron shrink-0" />
+                  <span><strong>Delivery Time:</strong> 35–45 minutes in Kahalgaon Town & NTPC Township</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Utensils className="w-4 h-4 text-charcoal/60 shrink-0" />
+                  <span><strong>Operating Hours:</strong> 11:30 AM to 10:30 PM (7 Days)</span>
+                </div>
               </div>
 
+              <div className="text-center pt-1">
+                <button 
+                  onClick={() => setIsOrderCallModalOpen(false)}
+                  className="text-xs text-charcoal/60 hover:text-charcoal font-semibold underline cursor-pointer"
+                >
+                  Close & Return to Menu
+                </button>
+              </div>
             </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
 
-
-      {/* --- ORDER CONFIRMATION SCREEN MODAL --- */}
+      {/* --- MOCKTAIL SPECIAL POSTER LIGHTBOX MODAL --- */}
       <AnimatePresence>
-        {orderConfirmation && (
-          <div className="fixed inset-0 z-55 overflow-y-auto bg-charcoal/70 flex items-center justify-center p-4">
+        {isMocktailPosterModalOpen && (
+          <div className="fixed inset-0 z-55 overflow-y-auto bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl p-6 text-left space-y-6 relative border border-charcoal/5"
-              id="confirmation-modal"
+              className="relative max-w-md w-full bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col"
             >
-              
-              <div className="text-center space-y-3">
-                <div className="bg-emerald-100 p-3.5 rounded-full text-emerald-600 inline-flex items-center justify-center mb-1">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-600" />
-                </div>
-                <h3 className="font-display font-bold text-2xl text-charcoal">
-                  Order Summary Ready!
+              <div className="relative">
+                <img 
+                  src="/mocktail-special-october.jpg" 
+                  alt="Curry Delight 30% Off on Mocktails Offer Poster" 
+                  className="w-full h-auto max-h-[75vh] object-contain bg-black"
+                />
+                <button 
+                  onClick={() => setIsMocktailPosterModalOpen(false)}
+                  className="absolute top-3 right-3 bg-black/70 hover:bg-black text-white p-2 rounded-full cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 text-center space-y-3 bg-white">
+                <h3 className="font-display font-bold text-xl text-charcoal">
+                  30% Discount on Mocktails
                 </h3>
-                <p className="text-xs text-emerald-800 font-bold bg-emerald-50 px-3.5 py-1.5 rounded-full inline-block font-mono">
-                  Order Reference: {orderConfirmation.orderId}
+                <p className="text-xs text-charcoal/70">
+                  Virgin Mint Mojito & Blue Lagoon • Valid for October Month only!
                 </p>
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-center mt-2">
-                  <p className="text-xs font-semibold text-amber-900">
-                    "We'll confirm your order on WhatsApp or by phone shortly."
-                  </p>
-                  <p className="text-[11px] text-amber-800/80 mt-1">
-                    Please send your order via WhatsApp or tap Call to Order below to complete.
-                  </p>
+                <div className="flex gap-3 justify-center pt-1">
+                  <a 
+                    href={`tel:${RESTAURANT_PHONES.primary}`}
+                    className="bg-saffron hover:bg-[#d15423] text-white px-6 py-2.5 rounded-full font-bold text-xs flex items-center gap-2 shadow-sm"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5" />
+                    <span>Call to Order ({RESTAURANT_PHONES.primaryDisplay})</span>
+                  </a>
+                  <button 
+                    onClick={() => setIsMocktailPosterModalOpen(false)}
+                    className="border border-charcoal/20 hover:border-charcoal text-charcoal px-4 py-2.5 rounded-full font-bold text-xs"
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
-
-              {/* Order breakdown summary */}
-              <div className="border-y border-charcoal/10 py-5 space-y-4 text-xs text-charcoal/90">
-                <h4 className="font-bold text-charcoal uppercase tracking-wider text-[10px] font-mono">Order Details</h4>
-                
-                <div className="max-h-36 overflow-y-auto space-y-2.5">
-                  {orderConfirmation.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between font-medium">
-                      <span>
-                        {item.menuItem.name} <strong className="text-charcoal">x{item.quantity}</strong>
-                        {item.selectedSpice && <span className="text-[10px] text-charcoal/50 ml-1.5">({item.selectedSpice})</span>}
-                      </span>
-                      <span className="font-bold font-tabular-nums text-charcoal">₹{item.menuItem.price * item.quantity}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-charcoal/10 pt-4 space-y-2 text-xs">
-                  <div className="flex justify-between text-charcoal/70">
-                    <span>Subtotal</span>
-                    <span className="font-tabular-nums">₹{orderConfirmation.subtotal}</span>
-                  </div>
-                  {orderConfirmation.discount > 0 && (
-                    <div className="flex justify-between text-emerald-700 font-bold">
-                      <span>{settings?.offer?.code || 'PROMO'} Discount ({settings?.offer?.discountPercent || 15}%)</span>
-                      <span className="font-tabular-nums">-₹{orderConfirmation.discount}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-charcoal/70">
-                    <span>Delivery Charge</span>
-                    <span className="font-tabular-nums">
-                      {orderConfirmation.deliveryFee === 0 ? 'FREE' : `₹${orderConfirmation.deliveryFee}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold text-charcoal border-t border-charcoal/10 pt-3">
-                    <span>Total Amount</span>
-                    <span className="text-saffron font-tabular-nums text-lg">₹{orderConfirmation.total}</span>
-                  </div>
-                </div>
-
-                {/* Customer Details */}
-                <div className="bg-cream/40 p-4 rounded-2xl border border-charcoal/5 space-y-1.5 mt-2 text-[11px] leading-relaxed">
-                  <div><strong>Customer Name:</strong> {orderConfirmation.summary.fullName}</div>
-                  <div><strong>Phone:</strong> {orderConfirmation.summary.phone}</div>
-                  {orderConfirmation.summary.deliveryType === 'delivery' ? (
-                    <div><strong>Delivery Address:</strong> {orderConfirmation.summary.address}</div>
-                  ) : (
-                    <div><strong>Type:</strong> Self Pickup at Curry Delight, Shiv Parvati Nagar (Block Rd)</div>
-                  )}
-                  {orderConfirmation.summary.specialInstructions && (
-                    <div className="italic mt-1 text-charcoal/65"><strong>Note:</strong> "{orderConfirmation.summary.specialInstructions}"</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Order completion clear action buttons */}
-              <div className="space-y-3">
-                <button 
-                  onClick={() => handleSendOrderWhatsApp(orderConfirmation)}
-                  className="w-full min-h-[44px] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all duration-150"
-                  id="whatsapp-send-order-btn"
-                >
-                  <MessageSquare className="w-5 h-5 fill-white text-[#25D366]" />
-                  <span>Send via WhatsApp</span>
-                </button>
-                
-                <a 
-                  href={`tel:${settings?.contactPhone || '+917061591831'}`}
-                  className="w-full min-h-[44px] bg-saffron hover:bg-[#d05220] text-white font-bold text-sm py-3.5 px-4 rounded-full flex items-center justify-center space-x-2 shadow-md cursor-pointer text-center transition-all duration-150"
-                  id="call-to-order-btn"
-                >
-                  <Phone className="w-5 h-5" />
-                  <span>Call to Order ({settings?.contactPhone || '+91 70615 91831'})</span>
-                </a>
-
-                <button 
-                  onClick={() => setOrderConfirmation(null)}
-                  className="w-full min-h-[44px] bg-charcoal hover:bg-charcoal/90 text-white font-bold text-xs py-3 rounded-full cursor-pointer transition-all duration-150 text-center"
-                  id="close-confirmation-modal-btn"
-                >
-                  Dismiss & Back to Menu
-                </button>
-              </div>
-
             </motion.div>
           </div>
         )}
