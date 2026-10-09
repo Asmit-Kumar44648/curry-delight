@@ -117,11 +117,12 @@ export default function OnlineOrdering({
   const groupedMenu = useMemo(() => {
     return MENU_TIERS.map(tier => {
       const tierCategories = tier.categories.map(catName => {
-        const items = menuItems.filter(item => {
+        const items = (menuItems || []).filter(item => {
+          if (!item) return false;
           const matchesCat = item.category === catName;
           const matchesSearch = !searchQuery || 
-            item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            item.description.toLowerCase().includes(searchQuery.toLowerCase());
+            Boolean(item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())) || 
+            Boolean(item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
           const matchesDiet = dietFilter === 'all' || 
             (dietFilter === 'veg' && item.isVeg) || 
             (dietFilter === 'non-veg' && !item.isVeg);

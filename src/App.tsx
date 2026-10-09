@@ -132,8 +132,16 @@ export default function App() {
   ], []);
 
   const bestsellerMenuItems = useMemo(() => {
-    return menuItems.filter(item => BESTSELLER_IDS.includes(item.id));
+    return (menuItems || []).filter(item => item && item.id && BESTSELLER_IDS.includes(item.id));
   }, [BESTSELLER_IDS, menuItems]);
+
+  const categories = useMemo(() => {
+    return Array.from(new Set(
+      (menuItems || [])
+        .map(item => item?.category)
+        .filter((cat): cat is string => Boolean(cat && typeof cat === 'string'))
+    ));
+  }, [menuItems]);
 
   // Section references for in-page navigation
   const homeRef = useRef<HTMLDivElement>(null);
@@ -163,7 +171,7 @@ export default function App() {
     <div className="min-h-screen bg-[#FFF9F2] font-sans text-ink selection:bg-saffron selection:text-white">
       
       {/* Dynamic Flash Announcement Banner (Weather / Festival / Rush Alert) */}
-      {settings.announcementBanner?.enabled && (
+      {settings?.announcementBanner?.enabled && (
         <div 
           className={`py-2 px-4 text-xs font-bold text-center tracking-wide flex items-center justify-center gap-2 shadow-sm ${
             settings.announcementBanner.type === 'weather'
@@ -740,15 +748,15 @@ export default function App() {
                   </div>
 
                   {/* Dynamic Categories */}
-                  {Array.from(new Set(menuItems.map(item => item.category as string))).map((cat: string) => {
-                    const firstItem = menuItems.find(item => item.category === cat);
-                    const catImg = firstItem ? firstItem.image : 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120';
+                  {categories.map((cat: string) => {
+                    const firstItem = (menuItems || []).find(item => item && item.category === cat);
+                    const catImg = firstItem?.image || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=120&h=120';
                     return (
                       <div 
                         key={cat}
                         onClick={() => handleCategoryClick(cat)}
                         className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group"
-                        id={`category-btn-${cat.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                        id={`category-btn-${String(cat).toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                       >
                         <div className="w-16 h-16 rounded-full bg-white p-1 shadow-sm transition-all duration-300 border border-charcoal/10 group-hover:border-charcoal/30">
                           <img src={catImg} className="w-full h-full rounded-full object-cover" alt={cat} />
@@ -957,9 +965,7 @@ export default function App() {
             </section>
 
             {/* 8. GALLERY COMPONENT */}
-            <div ref={galleryRef}>
-              <Gallery />
-            </div>
+            <Gallery galleryRef={galleryRef} />
 
           </motion.div>
         )}

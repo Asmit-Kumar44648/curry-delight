@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home, RotateCcw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -24,18 +24,28 @@ export default class ErrorBoundary extends Component<Props, State> {
     console.error('Curry Delight caught unhandled error:', error, errorInfo);
   }
 
-  private handleReset = () => {
-    try {
-      // Clear potentially corrupted transient session
-      sessionStorage.removeItem('cd_pos_auth');
-    } catch {
-      // ignore
-    }
+  private handleReload = () => {
+    window.location.reload();
+  };
+
+  private handleHome = () => {
+    this.setState({ hasError: false, error: null });
     window.location.href = '/';
   };
 
-  private handleReload = () => {
-    window.location.reload();
+  private handleResetAll = () => {
+    try {
+      localStorage.removeItem('curry_delight_menu_items');
+      localStorage.removeItem('curry_delight_settings');
+      localStorage.removeItem('curry_delight_pos_orders');
+      localStorage.removeItem('curry_delight_table_sessions');
+      sessionStorage.removeItem('cd_pos_auth');
+      localStorage.removeItem('cd_pos_auth');
+    } catch {
+      // ignore
+    }
+    this.setState({ hasError: false, error: null });
+    window.location.href = '/';
   };
 
   public render() {
@@ -52,25 +62,41 @@ export default class ErrorBoundary extends Component<Props, State> {
               <p className="text-sm text-[#1A1613]/70">
                 Something unexpected happened while rendering the page. Don't worry, your data is safe.
               </p>
+              {this.state.error?.message && (
+                <div className="bg-red-50 text-red-700 p-2.5 rounded-xl text-[11px] font-mono text-left overflow-x-auto border border-red-200">
+                  {this.state.error.message}
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                type="button"
-                onClick={this.handleReload}
-                className="flex-1 bg-[#E8622C] hover:bg-[#d15423] text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-full transition-all duration-200 shadow-md flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Reload Page</span>
-              </button>
+            <div className="flex flex-col gap-2.5 pt-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={this.handleReload}
+                  className="flex-1 bg-[#E8622C] hover:bg-[#d15423] text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-full transition-all duration-200 shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Reload Page</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={this.handleHome}
+                  className="flex-1 bg-[#1A1613]/5 hover:bg-[#1A1613]/10 text-[#1A1613] font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-full transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Home className="w-4 h-4" />
+                  <span>Home</span>
+                </button>
+              </div>
 
               <button
                 type="button"
-                onClick={this.handleReset}
-                className="flex-1 bg-[#1A1613]/5 hover:bg-[#1A1613]/10 text-[#1A1613] font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-full transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                onClick={this.handleResetAll}
+                className="w-full text-center text-xs text-[#E8622C] hover:text-[#d15423] font-bold py-2 cursor-pointer transition-colors flex items-center justify-center gap-1.5"
               >
-                <Home className="w-4 h-4" />
-                <span>Home</span>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Cache & Return to Home</span>
               </button>
             </div>
           </div>
