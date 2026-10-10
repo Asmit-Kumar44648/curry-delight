@@ -263,12 +263,17 @@ function loadFromStorage() {
   try {
     const storedMenu = localStorage.getItem(STORAGE_KEYS.MENU);
     if (storedMenu) {
-      _menuItems = JSON.parse(storedMenu).map((item: MenuItem) => {
-        if (SPECIFIC_DISH_IMAGES[item.id]) {
-          return { ...item, image: SPECIFIC_DISH_IMAGES[item.id] };
-        }
-        return item;
-      });
+      const parsed = JSON.parse(storedMenu);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        _menuItems = parsed.filter(Boolean).map((item: MenuItem) => {
+          if (item && item.id && SPECIFIC_DISH_IMAGES[item.id]) {
+            return { ...item, image: SPECIFIC_DISH_IMAGES[item.id] };
+          }
+          return item;
+        });
+      } else {
+        _menuItems = [...MENU_ITEMS];
+      }
     } else {
       _menuItems = [...MENU_ITEMS];
       localStorage.setItem(STORAGE_KEYS.MENU, JSON.stringify(_menuItems));
@@ -276,7 +281,12 @@ function loadFromStorage() {
 
     const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (storedSettings) {
-      _settings = { ...DEFAULT_SETTINGS, ...JSON.parse(storedSettings) };
+      const parsedSettings = JSON.parse(storedSettings);
+      if (parsedSettings && typeof parsedSettings === 'object') {
+        _settings = { ...DEFAULT_SETTINGS, ...parsedSettings };
+      } else {
+        _settings = { ...DEFAULT_SETTINGS };
+      }
     } else {
       _settings = { ...DEFAULT_SETTINGS };
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(_settings));
@@ -284,14 +294,20 @@ function loadFromStorage() {
 
     const storedOrders = localStorage.getItem(STORAGE_KEYS.POS_ORDERS);
     if (storedOrders) {
-      _posOrders = JSON.parse(storedOrders);
+      const parsedOrders = JSON.parse(storedOrders);
+      _posOrders = Array.isArray(parsedOrders) ? parsedOrders.filter(Boolean) : [];
     } else {
       _posOrders = [];
     }
 
     const storedTables = localStorage.getItem(STORAGE_KEYS.TABLES);
     if (storedTables) {
-      _tableSessions = JSON.parse(storedTables);
+      const parsedTables = JSON.parse(storedTables);
+      if (Array.isArray(parsedTables) && parsedTables.length > 0) {
+        _tableSessions = parsedTables.filter(Boolean);
+      } else {
+        _tableSessions = [...DEFAULT_TABLES];
+      }
     } else {
       _tableSessions = [...DEFAULT_TABLES];
       localStorage.setItem(STORAGE_KEYS.TABLES, JSON.stringify(_tableSessions));
@@ -299,14 +315,16 @@ function loadFromStorage() {
 
     const storedExpenses = localStorage.getItem(STORAGE_KEYS.EXPENSES);
     if (storedExpenses) {
-      _pettyExpenses = JSON.parse(storedExpenses);
+      const parsedExpenses = JSON.parse(storedExpenses);
+      _pettyExpenses = Array.isArray(parsedExpenses) ? parsedExpenses.filter(Boolean) : [];
     } else {
       _pettyExpenses = [];
     }
 
     const storedCustomers = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
     if (storedCustomers) {
-      _customerProfiles = JSON.parse(storedCustomers);
+      const parsedCustomers = JSON.parse(storedCustomers);
+      _customerProfiles = (parsedCustomers && typeof parsedCustomers === 'object') ? parsedCustomers : {};
     } else {
       _customerProfiles = {};
     }

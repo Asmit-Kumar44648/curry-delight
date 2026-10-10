@@ -31,11 +31,7 @@ import { adminStore, AdminSettings } from './lib/adminStore';
 
 const RESTAURANT_PHONES = {
   primary: '+917061591831',
-  primaryDisplay: '+91 70615 91831',
-  secondary: '+919122421316',
-  secondaryDisplay: '+91 91224 21316',
-  landline: '+919431498112',
-  landlineDisplay: '+91 94314 98112'
+  primaryDisplay: '+91 70615 91831'
 };
 
 const getNormalizedPath = (path: string) => {
@@ -1057,20 +1053,8 @@ export default function App() {
             <div className="space-y-3 text-xs text-[#FFF9F2]/75">
               <div className="flex items-center gap-2">
                 <PhoneCall className="w-4 h-4 text-saffron shrink-0" />
-                <a href={`tel:${RESTAURANT_PHONES.primary}`} className="text-white font-bold hover:text-saffron transition-colors">
+                <a href={`tel:${RESTAURANT_PHONES.primary}`} className="text-white font-bold hover:text-saffron transition-colors text-sm">
                   {RESTAURANT_PHONES.primaryDisplay} (Counter)
-                </a>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-saffron shrink-0" />
-                <a href={`tel:${RESTAURANT_PHONES.secondary}`} className="text-white/90 hover:text-saffron transition-colors">
-                  {RESTAURANT_PHONES.secondaryDisplay} (Kitchen)
-                </a>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-white/50 shrink-0" />
-                <a href={`tel:${RESTAURANT_PHONES.landline}`} className="text-white/80 hover:text-saffron transition-colors">
-                  {RESTAURANT_PHONES.landlineDisplay}
                 </a>
               </div>
               <p className="text-[11px] text-cream/50 pt-1">
@@ -1223,28 +1207,11 @@ export default function App() {
                   <div className="flex items-center gap-3">
                     <PhoneCall className="w-5 h-5" />
                     <div className="text-left">
-                      <span className="block text-xs uppercase font-mono tracking-wider text-white/80">Primary Counter Line</span>
+                      <span className="block text-xs uppercase font-mono tracking-wider text-white/80">Direct Order Desk</span>
                       <strong className="text-base font-sans">{RESTAURANT_PHONES.primaryDisplay}</strong>
                     </div>
                   </div>
                   <span className="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-mono uppercase">
-                    Tap to Call
-                  </span>
-                </a>
-
-                <a 
-                  href={`tel:${RESTAURANT_PHONES.secondary}`}
-                  className="w-full bg-charcoal hover:bg-black text-white font-bold text-sm py-4 px-6 rounded-2xl flex items-center justify-between shadow-md transition-all hover:scale-101 active:scale-99"
-                  id="modal-call-secondary-btn"
-                >
-                  <div className="flex items-center gap-3">
-                    <Phone className="w-5 h-5 text-saffron" />
-                    <div className="text-left">
-                      <span className="block text-xs uppercase font-mono tracking-wider text-white/80">Alternate Kitchen Line</span>
-                      <strong className="text-base font-sans">{RESTAURANT_PHONES.secondaryDisplay}</strong>
-                    </div>
-                  </div>
-                  <span className="bg-white/10 text-white text-xs px-3 py-1 rounded-full font-mono uppercase">
                     Tap to Call
                   </span>
                 </a>

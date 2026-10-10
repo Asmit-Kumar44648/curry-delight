@@ -1062,7 +1062,7 @@ export default function POSModule({ navigateTo }: POSModuleProps) {
   // ─── If Not Authenticated: Render Step 5 Access Gate ───────────────────────
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-charcoal flex flex-col justify-center items-center p-4 selection:bg-saffron selection:text-white">
+      <div className="min-h-screen bg-[#FFF9F2] flex flex-col justify-center items-center p-4 selection:bg-saffron selection:text-white">
         <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-2xl border border-charcoal/10 space-y-6 text-left">
           {/* Logo / Header */}
           <div className="text-center space-y-2">

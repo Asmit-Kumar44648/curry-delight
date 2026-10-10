@@ -200,19 +200,11 @@ export default function OnlineOrdering({
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
             <a 
               href="tel:+917061591831"
-              className="bg-saffron hover:bg-[#d15423] text-white px-6 py-3.5 rounded-full font-bold text-sm flex items-center justify-center gap-2 shadow-lg hover:scale-102 active:scale-98 transition-all"
+              className="bg-saffron hover:bg-[#d15423] text-white px-8 py-3.5 rounded-full font-bold text-sm flex items-center justify-center gap-2 shadow-lg hover:scale-102 active:scale-98 transition-all"
               id="menu-header-call-primary"
             >
               <PhoneCall className="w-4 h-4" />
-              <span>Call: 7061591831</span>
-            </a>
-            <a 
-              href="tel:+919122421316"
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-3.5 rounded-full font-bold text-xs flex items-center justify-center gap-2 hover:scale-102 active:scale-98 transition-all"
-              id="menu-header-call-secondary"
-            >
-              <Phone className="w-3.5 h-3.5 text-saffron" />
-              <span>Alt: 9122421316</span>
+              <span>Call: +91 70615 91831</span>
             </a>
           </div>
         </div>
